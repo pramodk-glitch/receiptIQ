@@ -16,6 +16,7 @@
 8. [Platform Strategy](#8-platform-strategy)
 9. [Delivery Roadmap](#9-delivery-roadmap)
 10. [Success Metrics](#10-success-metrics)
+11. [Weekly Email Digest](#11-weekly-email-digest)
 
 ---
 
@@ -379,6 +380,76 @@ list_items       (jsonb array)
 | **Avg Receipts / User** | 8+ per month | Signals complete household use |
 | **Price Alerts Actioned** | > 30% click-through | Validates intelligence value |
 | **Shopping List Uses** | 3+ per active user/mo | Core differentiator usage |
+
+---
+
+---
+
+## 11. Weekly Email Digest
+
+> **Priority: Q1 — ship a basic version early.** Weekly emails solve the cold-start and habit problem directly. Instead of users needing to remember to open the app, intelligence comes to them. Done well, it becomes the reason they keep scanning receipts.
+
+### Why It Matters
+
+Most expense trackers die at week 2 when the novelty wears off. A well-crafted weekly email creates a small personal moment every Monday morning — *"here's what your money did last week"* — and pulls users back into the app with a concrete reason to act.
+
+### Email Contents (4–6 data points max)
+
+| Section | Content | Why It Works |
+|---|---|---|
+| **Weekly Spend Snapshot** | Total spent vs. last week and vs. your average | Instant context, no effort to interpret |
+| **Price Win of the Week** | "You bought olive oil at Costco — $2.40 cheaper than Target" | Makes users feel smart, reinforces scanning habit |
+| **Watch Out** | One category that spiked vs. usual | Creates mild urgency without being preachy |
+| **Top Item This Week** | Biggest single line item with price history | Surprising and personal |
+| **Savings Opportunity** | One item you regularly buy that's cheaper elsewhere | Tangible and actionable |
+| **Shopping List Nudge** | "Planning your weekly shop? Estimate your list →" | Direct CTA back into the app |
+
+### Framing Rules
+
+- Say **"You saved $18 vs. last week"** not "You spent $340" — positive framing drives opens
+- Never send if user has fewer than 3 scanned receipts — an empty email kills trust
+- Keep it scannable in under 30 seconds — this is a digest, not a newsletter
+- One clear CTA per email, always linking back into the app
+
+### Triggered Emails (beyond the weekly digest)
+
+| Trigger | Email | Timing |
+|---|---|---|
+| No scan in 5 days | Re-engagement nudge with last week's best insight | Day 5 of inactivity |
+| 80% of budget used | Budget warning with days remaining | Real-time |
+| Price drop detected | "Tide Pods are $4 cheaper at Costco this week" | Within 24hrs of detection |
+| Monthly rollover | Richer summary with full category breakdown | 1st of each month |
+| First receipt scanned | Welcome + what to expect next | Immediately |
+
+### Frequency & Cadence Logic
+
+| User State | Cadence |
+|---|---|
+| Active (3+ scans/week) | Weekly digest every Monday 7am (user local time) |
+| Semi-active (1–2 scans/week) | Weekly digest with re-engagement nudge |
+| Inactive (< 1 scan/week for 2 weeks) | Auto-downgrade to monthly summary |
+| Opted out | Triggered alerts only (budget warnings, price drops) |
+
+### Implementation
+
+```
+PostgreSQL query  →  aggregate user's week data
+        ↓
+Claude            →  generate 1–2 personalized insight sentences per user
+        ↓
+Resend / SendGrid →  React Email HTML template, personalised per user
+        ↓
+Cron job          →  Sunday 10pm UTC, delivered Monday morning in user's timezone
+```
+
+**Recommended stack:** Resend (transactional email API) + React Email (template authoring) — clean API, generous free tier, easy to preview templates in browser during development.
+
+### What Not to Do
+
+- Don't send all 35 reports — pick 4–6 data points max per email
+- Don't mirror the app UI in the email — summarize, then link to the full view
+- Don't send to users with no data — gate behind minimum 3 scanned receipts
+- Don't make it feel like a bill — frame around savings and wins, not raw spend totals
 
 ---
 
