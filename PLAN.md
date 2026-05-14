@@ -1,456 +1,466 @@
-# ReceiptIQ — Product Plan v1.0
+# ReceiptIQ — Pending Changes Staging Plan
 
-> An AI-powered, multi-category expense tracker that turns paper receipts into deep financial intelligence — with item-level price history, cross-vendor comparison, and smart shopping list estimation.
-
----
-
-## Table of Contents
-
-1. [Product Overview](#1-product-overview)
-2. [Market Analysis](#2-market-analysis)
-3. [Core User Journeys](#3-core-user-journeys)
-4. [Feature Roadmap](#4-feature-roadmap)
-5. [Analytics Reports](#5-analytics-reports)
-6. [Tech Stack](#6-tech-stack)
-7. [Data Model](#7-data-model)
-8. [Platform Strategy](#8-platform-strategy)
-9. [Delivery Roadmap](#9-delivery-roadmap)
-10. [Success Metrics](#10-success-metrics)
-11. [Weekly Email Digest](#11-weekly-email-digest)
+> Changes queued here will be merged into `ReceiptIQ_ProductPlan.jsx` once all requirements are finalized.
 
 ---
 
-## 1. Product Overview
+## 1. Auto-Ingestion Feature
 
-ReceiptIQ solves a problem no existing app fully addresses: a single, unified platform that combines receipt scanning across all spending categories, item-level price tracking, real-time vendor price comparison, and AI-powered shopping list cost estimation.
+### Overview
+Enable users to connect Amazon, Costco, Walmart, and 20+ other retailers so receipts flow in automatically — no manual scanning needed.
 
-### The Market Gap
-
-- No single app combines receipt scanning + multi-category tracking + vendor price comparison + shopping list estimation
-- No app covers non-grocery categories (electronics, medicine, stationery) at item level
-- No app uses AI to estimate shopping list cost across local vendors in real time
-- No app tracks the same item's price inflation across stores over time
-- No app offers both mobile and full web portal with equal feature parity
+**Roadmap slot:** Phase 4 (split into 4A and 4B)  
+**New section tab:** "Auto-Ingestion" (⚡)  
+**Version bump:** v1.0 → v2.0
 
 ---
 
-## 2. Market Analysis
+### 1.1 Ingestion Channels
 
-| App | Focus | Strength | Gap | Pricing |
+| Channel | Priority | Effort | Coverage |
+|---|---|---|---|
+| Email OAuth (Gmail + Outlook) | Phase 4A — Ship First | Medium | ~80% of use cases |
+| Forward-to-Email (receipts@receiptiq.app) | Phase 4A — Ship Alongside | Low | Any retailer, any client |
+| Browser Extension (Chrome + Safari) | Phase 4B — After Email | High | Amazon, Costco, Walmart, Target |
+| Direct Retailer API (partnerships) | Phase 5 | Very High | Costco, Kroger, select grocery chains |
+
+**Recommended build order:** Ship Gmail OAuth + forward-to-email together in Phase 4A — covers 80% of use cases with medium effort and minimal legal risk. Hold the browser extension until Phase 4B pending ToS legal review. Retailer APIs are a Phase 5 BD track.
+
+---
+
+#### Email OAuth (Gmail & Outlook)
+User connects Gmail or Outlook via OAuth2. ReceiptIQ watches for emails from known retailer domains and auto-parses receipts in the background — no action needed after setup.
+
+**Retailers covered:** Amazon, Walmart, Target, Costco, Whole Foods, Best Buy, Walgreens, CVS, Home Depot, DoorDash, Instacart, Uber Eats, Apple, IKEA
+
+**Advantages**
+- Works for any store that sends receipt emails
+- One-time connect, fully automatic thereafter
+- Works retroactively on inbox history (opt-in)
+- Uses official OAuth APIs — no scraping
+
+**Risks**
+- Requires email access permission — needs clear privacy comms
+- Retailer email formats change — parser needs maintenance
+- Gmail/Outlook API rate limits apply
+
+---
+
+#### Forward-to-Email
+Every user gets a unique forwarding address (e.g. `alex-7x3k@receipts.receiptiq.app`). Forward any receipt email to it and it's auto-ingested. No OAuth, no inbox access required.
+
+**Advantages**
+- No inbox access — minimal privacy concern
+- Works with any email client, any retailer, internationally
+- Simple inbound email infrastructure (SendGrid Inbound Parse)
+- Great for users uncomfortable with OAuth
+
+**Risks**
+- Manual forward step required per receipt
+- Users may forget to forward
+- Need inbound email infrastructure setup
+
+---
+
+#### Browser Extension (Chrome + Safari)
+Lightweight extension that detects retailer order history pages and offers one-click import. Also intercepts order confirmation pages in real time.
+
+**Retailers covered:** Amazon (order history + confirmation pages), Costco.com (purchase history), Walmart.com, Target.com
+
+**Advantages**
+- Pulls full order history retroactively
+- Real-time interception on confirmation pages
+- Richer data than email (item images, ASINs)
+
+**Risks**
+- Requires extension install (friction)
+- Against some retailers' ToS — legal review needed before shipping
+- Page structure changes break the scraper
+- Chrome Web Store review process
+
+---
+
+#### Direct Retailer API (Phase 5)
+Formal API partnerships with retailers. User connects their loyalty account and ReceiptIQ pulls purchase data via official APIs.
+
+**Retailers targeted:** Costco (member purchase API), Kroger / King Soopers, Albertsons, Safeway, Whole Foods (via Amazon account link)
+
+**Advantages**
+- Most reliable — official channel
+- Richest data (barcodes, nutritional info)
+- No ToS concerns
+- Can back-fill years of purchase history
+
+**Risks**
+- Requires retailer BD deals — long sales cycles (6–18 months)
+- Most major retailers have no public API
+- Revenue share or API fees may apply
+
+---
+
+### 1.2 Email Parser Coverage
+
+| Retailer | Domain | Confidence | Fields Extracted | Status |
 |---|---|---|---|---|
-| **Groceries Tracker** | Grocery-only | AI OCR per item, store comparison, household sharing | No broad categories (medicine, electronics) | Freemium |
-| **Expensify** | Business expense mgmt | Industry-leading SmartScan OCR, multi-currency, policy enforcement | No item-level price tracking, not consumer-focused | $4.99–$9/mo |
-| **Skwad** | Household budgeting | Line-item extraction, cloud sync, receipt categorization | No vendor price comparison, no shopping list AI | Freemium |
-| **Fetch Rewards** | Receipt rebates/loyalty | Any store receipt accepted, large user base | Rebate app only — zero spending analytics | Free (ad-supported) |
-| **GroceryTracker Pro** | Grocery budgeting | Household sharing, monthly trend charts, store totals | Grocery only, no cross-category analytics | Free + Premium |
-| **Smart Receipts** | Tax documentation | Offline, open-source, CSV/PDF export | No auto-categorization, no analytics | Free / $2.99/mo |
-| **Ibotta / Checkout 51** | Cashback rebates | Stacks with price trackers, PayPal payout | No expense tracking, no analytics | Free |
-| **Flipp / Basket** | Pre-purchase price compare | Real-time weekly flyer data, multi-store price check | No receipt ingestion, no personal analytics | Free |
+| Amazon | amazon.com | 97% | Order ID, items, qty, price, delivery date | ✓ Ready |
+| Walmart | walmart.com | 93% | Items, totals, store/online flag | ✓ Ready |
+| Costco | costco.com | 91% | Items, membership#, warehouse | ✓ Ready |
+| Target | target.com | 94% | Items, RedCard savings, store | ✓ Ready |
+| Best Buy | bestbuy.com | 89% | Items, SKU, warranty info | ✓ Ready |
+| Whole Foods | wholefoodsmarket.com | 88% | Items, Prime savings | ✓ Ready |
+| Walgreens | walgreens.com | 85% | Items, rewards balance | ✓ Ready |
+| CVS | cvs.com | 83% | Items, ExtraBucks | ✓ Ready |
+| DoorDash | doordash.com | 96% | Restaurant, items, fees, tip | ✓ Ready |
+| Instacart | instacart.com | 94% | Store, items, delivery fee | ✓ Ready |
+| Apple | apple.com | 98% | App/item, price, Apple ID | ✓ Ready |
+| Uber Eats | uber.com | 95% | Restaurant, items, promo | ✓ Ready |
+| Home Depot | homedepot.com | 87% | Items, SKU, Pro account | Planned |
+| IKEA | ikea.com | 82% | Items, article number | Planned |
 
-**Verdict:** No existing app offers the full combination of multi-category receipt scanning + item-level price history + live vendor comparison + AI shopping list estimation. ReceiptIQ occupies a unique position in this market.
+**Claude Vision fallback:** When structured parsing confidence < 0.80, raw email HTML is passed to Claude Vision for extraction. Slower but handles novel formats.
 
----
+**Parser maintenance:** Retailer email templates change ~2–4× per year. Each parser has a version hash; mismatches trigger re-training on the new template.
 
-## 3. Core User Journeys
-
-### 📷 Upload Receipt
-Snap a photo → AI extracts every line item → stored with category, price, store, and date.
-
-### 📈 Price Intelligence
-Click any item → see price history chart → AI fetches current vendor prices → shows savings opportunity.
-
-### 🛒 Smart Shopping
-Type your shopping list → AI estimates total cost per store → recommends optimal store split.
-
-### 📊 Analytics
-Run 35+ reports across spending, inflation, behavior, savings, and forecasting.
+**Duplicate detection:** SHA-256 hash of (retailer + date + total + first 3 items). Prevents the same receipt being added via email + manual upload.
 
 ---
 
-## 4. Feature Roadmap
+### 1.3 Privacy & Security
 
-### 🏗️ Phase 1 — Core
+> Privacy is the #1 user objection. Strategy: request minimal scope, store nothing raw, be fully transparent, and make revoking access one tap.
 
-| Feature | Description |
+| Measure | Detail |
 |---|---|
-| **User Registration & Login** | Email/password + OAuth (Google, Apple). JWT-based sessions. Per-user encrypted data isolation. |
-| **Receipt Upload & OCR** | Upload photo, PDF, or screenshot. Claude Vision API extracts store name, date, total, and every line item with name, qty, unit price, total, and auto-detected category. |
-| **Line-Item Storage** | Each item stored individually in DB with user ID, receipt ID, date, store, category, unit price. Enables all downstream analytics. |
-| **Expense Dashboard** | Monthly spend overview, category breakdown pie chart, recent receipts list, quick stats (total this month, top category, biggest receipt). |
-| **Manual Entry** | Add items or receipts manually when no receipt is available. |
+| 🔐 Minimal Scope OAuth | Read-only access on emails from known receipt domains only — not full inbox. Uses Gmail's label filter scope. |
+| 🗑️ Email Content Not Stored | Raw email HTML parsed in-memory and immediately discarded. Only extracted line-item data is stored. |
+| 🔄 Revoke Anytime | One-tap disconnect from Settings. Revoking stops ingestion immediately and optionally deletes all auto-ingested receipts. |
+| 🏷️ Transparent Sourcing | Every auto-ingested receipt shows its source (📧 Gmail, 📨 Forwarded, 🧩 Extension). |
+| 🌍 GDPR / CCPA Compliant | Tokens stored encrypted at rest. Full data export and deletion on request. DPA available for EU users. |
+| 👁️ Audit Log | Users can see every email parsed, when, and what was extracted — full transparency. |
 
-### 🧠 Phase 2 — Intelligence
+**Gmail OAuth scope — what we request vs. never request:**
 
-| Feature | Description |
-|---|---|
-| **Item Price History** | Click any item to see every time it was purchased: date, store, price. Line chart shows price trend over time. Delta vs. first purchase shown prominently. |
-| **Vendor Price Comparison** | AI-powered lookup of current market price for the same item at Walmart, Target, Costco, Amazon, Whole Foods, Aldi, Kroger. Shows cheapest option and potential savings. |
-| **Category Analytics** | Deep-dive reports per category: spend trend, top items, average unit price, frequency of purchase, month-over-month change. |
-| **Inflation Tracker** | Track price changes for recurring items over time. Show % increase vs. 3mo/6mo/1yr ago. Compare personal inflation rate vs. CPI. |
-| **Store Performance** | Which stores you shop most, avg spend per visit, cost efficiency score (your price vs. market average). |
-
-### 🛒 Phase 3 — Smart Shopping
-
-| Feature | Description |
-|---|---|
-| **Shopping List Estimator** | Upload or type a shopping list. AI estimates cost per item using your price history + current market data. Shows total estimate per store. Recommends optimal store split. |
-| **Smart List Optimization** | Given a shopping list, AI suggests which store to buy each item from to minimize total cost. Accounts for travel effort with configurable store radius. |
-| **Budget Alerts** | Set monthly budgets per category. Real-time alerts when approaching or exceeding limits (push, email, SMS). |
-| **Predictive Spend** | Based on purchase patterns, forecast next month's spending per category. Highlight unusual spikes. |
-
-### 🚀 Phase 4 — Advanced
-
-| Feature | Description |
-|---|---|
-| **Household / Family Mode** | Shared account for household. Multiple members upload receipts. Unified analytics. Split-contribution view. |
-| **Export & Integrations** | Export to CSV, PDF, Excel. Connect to Mint, YNAB, QuickBooks. Tax report generation for FSA/HSA medicine purchases. |
-| **Barcode Scanner** | Scan product barcode to instantly look up current prices across vendors without a receipt. |
-| **Subscription Detection** | Identify recurring charges (streaming, memberships) from receipts. Track subscription spend. |
-| **Loyalty Card Tracker** | Track loyalty points and rewards across stores. Show value of unredeemed rewards. |
+- ✅ Request: read-only access to emails from known receipt domains only
+- ✅ Request: email metadata (sender, subject, date)
+- ❌ Never request: full inbox read access
+- ❌ Never request: send email on user's behalf
+- ❌ Never request: access to contacts or calendar
+- ❌ Never store: raw email HTML/text — parsed in-memory and immediately discarded
 
 ---
 
-## 5. Analytics Reports
+### 1.4 New Data Schema
 
-> Reports marked ★ require Vendor Price API integration. Reports marked ◆ require 3+ months of data.
-
-### 📊 Spending Overview (6 reports)
-1. **Monthly Total Spend** — total expenditure by month with trend line and % MoM change
-2. **Weekly Spend Pattern** — average spend per day of week; identify high-spend days
-3. **Category Spend Breakdown** — pie + bar chart of spend across Groceries, Electronics, Medicine, etc.
-4. **Annual Summary Report** — full year view with category heatmap and 12-month trend
-5. **Spend vs. Budget Tracker** — actual vs. target per category per month
-6. **Average Transaction Size** — mean receipt total per store with outlier flagging
-
-### 💰 Price Intelligence (6 reports)
-1. **Item Price History** — purchase price over time for any item, with trend line and stats
-2. **Personal Inflation Report** ◆ — % price increase for your recurring items vs. CPI benchmark
-3. **Vendor Price Matrix** ★ — side-by-side current price comparison for top 20 items across stores
-4. **Best Store by Category** ★ — which store gives best price per category
-5. **Price Anomaly Alerts** — items that spiked >10% vs. your historical average
-6. **Price Opportunity Map** ★ — items where you overpaid vs. cheapest available vendor
-
-### 🔄 Purchasing Behavior (6 reports)
-1. **Purchase Frequency Report** — how often you buy each item; flag items bought more than needed
-2. **Store Visit Analysis** — frequency, average spend, category mix per store
-3. **Basket Composition Report** — what categories you typically combine in one trip
-4. **Seasonal Spend Patterns** ◆ — month-by-month category spend across years; spot seasonal trends
-5. **Brand Preference Tracker** — store-brand vs. name-brand spend ratio per category
-6. **Impulse Buy Detector** — single-quantity items not on prior shopping patterns
-
-### 🏥 Health & Wellness (4 reports)
-1. **Medicine & Healthcare Spend** — total medical spend per month with per-item breakdown
-2. **Personal Care Spend Trend** — monthly spend on personal care items with product detail
-3. **Nutritional Budget Analysis** — estimated spend on fresh produce vs. processed food
-4. **FSA / HSA Eligible Spend** — auto-flag medicine receipts for tax reimbursement tracking
-
-### 💡 Savings & Optimization (5 reports)
-1. **Savings Opportunities Report** ★ — if you bought each item from cheapest vendor, total savings
-2. **Duplicate Purchase Detector** — same item bought within short window (possible pantry excess)
-3. **Bulk Buy ROI** ★ — items where buying in bulk at Costco/warehouse club saves vs. regular buys
-4. **Store-Switch Savings** ★ ◆ — estimated monthly savings if you switched primary store for top items
-5. **Coupon + Deal Gap Analysis** — items frequently purchased that have recurring deals you missed
-
-### 🔮 Forecasting & Planning (5 reports)
-1. **Next Month Spend Forecast** ◆ — ML-based prediction per category using 90-day rolling history
-2. **Shopping List Cost Estimate** ★ — predicted total for any planned shopping list
-3. **Annual Expense Projection** ◆ — extrapolate current patterns to full-year estimate
-4. **Category Budget Recommendation** ◆ — AI-suggested monthly budget per category based on patterns
-5. **Subscription & Recurring Cost Summary** — identified recurring charges and their annual impact
-
----
-
-## 6. Tech Stack
-
-### 🖥️ Frontend Web
-- React 18 + TypeScript
-- Next.js 14 (App Router)
-- TailwindCSS + shadcn/ui
-- Recharts / D3.js for analytics
-- React Query for server state
-- PWA manifest for offline support
-
-### 📱 Mobile App
-- React Native + Expo
-- Shared business logic with web
-- Native camera / OCR trigger
-- Push notifications (Expo)
-- Offline-first with SQLite sync
-- App Store + Google Play distribution
-
-### ⚙️ Backend API
-- Node.js + Express / Fastify
-- REST API + WebSockets
-- JWT authentication + refresh tokens
-- Rate limiting + input validation
-- OpenAPI / Swagger docs
-- Stripe for subscription billing
-
-### 🧠 AI / Intelligence
-- Claude claude-sonnet-4-20250514 (Vision OCR, JSON extraction)
-- Claude for vendor price comparison
-- Claude for shopping list estimation
-- LangChain for chained analysis workflows
-- Vector embeddings for item name fuzzy matching
-- Caching layer to reduce API costs
-
-### 🗄️ Data Storage
-- PostgreSQL (primary — users, receipts, items)
-- Redis (sessions, cache, rate limiting)
-- S3-compatible storage (receipt images)
-- Pinecone (vector embeddings for item matching)
-- TimescaleDB extension for time-series price data
-- Automatic daily backups
-
-### ☁️ Infrastructure
-- AWS / Vercel for web hosting
-- AWS Lambda for OCR processing jobs
-- CloudFront CDN for receipt images
-- GitHub Actions CI/CD pipeline
-- Sentry for error monitoring
-- Datadog for performance APM
-
-### AI Processing Flow
-
+#### New table: `ingestion_sources`
 ```
-📷 Receipt Upload
-       ↓
-🔍 Claude Vision  →  Extract store, date, all line items as JSON
-       ↓
-⚙️  Normalize     →  Fuzzy-match item names, assign categories
-       ↓
-💾 Store          →  PostgreSQL + price_history update
-       ↓
-📊 Analyze        →  Trigger dashboard refresh
+id (uuid, PK)
+user_id (FK → users)
+source_type ('gmail' | 'outlook' | 'forward' | 'extension' | 'retailer_api')
+retailer_domain (nullable)
+oauth_access_token (encrypted)
+oauth_refresh_token (encrypted)
+oauth_scope
+connected_at
+last_synced_at
+status ('active' | 'paused' | 'revoked')
+```
+
+#### New table: `ingestion_log`
+```
+id (uuid, PK)
+source_id (FK → ingestion_sources)
+user_id (FK → users)
+raw_email_id (external ID, hashed)
+retailer_domain
+parsed_at
+confidence_score (float 0–1)
+receipt_id (FK → receipts, nullable — null if failed)
+failure_reason (nullable)
+items_extracted (int)
+```
+
+#### Additive columns to `receipts` (existing table, backward-compatible)
+```
++ ingestion_source_id (FK → ingestion_sources, nullable)
++ auto_ingested (boolean, default false)
++ ingestion_confidence (float 0–1, nullable)
++ external_order_id (retailer order ID, nullable)
++ needs_review (boolean — flagged low-confidence)
 ```
 
 ---
 
-## 7. Data Model
+### 1.5 Roadmap Changes
 
-> The `receipt_items` table is the heart of the system — every line item stored individually enables all analytics. The `price_history` table is populated from both receipts and AI vendor lookups, powering comparison features.
+**Q4 2025 — Growth & Scale (add to existing items):**
+- Auto-ingestion: Gmail + Outlook OAuth ⚡
+- Auto-ingestion: Forward-to-email inbox ⚡
 
-### `users`
+**New Q1 2026 — Auto-Ingestion II (new card):**
+- Inbox history backfill (retroactive scan, opt-in)
+- Parser coverage expanded to 20+ retailers
+- Browser extension (Chrome + Safari)
+- Amazon / Costco order history import
+- Parser confidence scoring + user review flow
+- Retailer API partnership track begins
+
+---
+
+### 1.6 Success Metrics (replace 2 existing metrics)
+
+Replace "Price Alerts Actioned" and "Shopping List Uses" with:
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Email Connect Rate | > 30% of active users within 30 days of launch | Auto-ingestion adoption |
+| Auto-Ingest Share | > 60% of receipts via auto-ingestion within 3 months | Core differentiator validation |
+
+---
+
+### 1.7 Overview Section Changes
+
+- Version bump: `Product Plan · Version 1.0` → `Version 2.0`
+- Stats grid: change "4 Phases" → "5 Phases", add fifth card: "20+ Retailers / Auto-Ingestion"
+- Description: add mention of automatic receipt ingestion from 20+ retailers
+- User journeys: add "⚡ Auto-Ingestion" journey card
+
+---
+
+### 1.8 Market Section Changes
+
+- Verdict paragraph: add "automatic retailer ingestion" to the unique position statement
+- Gap list: add 6th item — "No app automatically pulls receipts from Amazon, Costco, Walmart and other retailers via email or browser"
+
+---
+
+### 1.9 Features Section Changes
+
+**Phase 4 — Advanced:** prepend 3 new feature items before existing ones:
+1. **Auto-Ingestion — Email OAuth** — Connect Gmail or Outlook once. ReceiptIQ watches your inbox for receipts from 20+ retailers and ingests them automatically in the background.
+2. **Auto-Ingestion — Forward-to-Email** — Every user gets a unique receipts@receiptiq.app address. Forward any receipt email to it and it's auto-parsed and added.
+3. **Auto-Ingestion — Browser Extension** — Chrome/Safari extension pulls full order history from Amazon, Costco, Walmart.com, and Target.com on demand.
+
+---
+
+### 1.10 Architecture Section Changes
+
+- **AI / Intelligence layer:** add "Claude Vision fallback for low-confidence email parses"
+- **Infrastructure layer:** add "SendGrid Inbound Parse for email ingestion"
+- **AI Processing Flow:** add a second flow diagram for the auto-ingestion pipeline:
+  `📧 Email Received → 🔍 Domain Check → 🤖 Parse Email → 🔁 Deduplicate → 💾 Ingest → 🔔 Notify User`
+
+---
+
+### 1.11 Navigation Changes
+
+- Add `"Auto-Ingestion"` to SECTIONS array (last position)
+- In header: render ⚡ icon alongside the Auto-Ingestion tab label
+- Active color for Auto-Ingestion tab: `#0ea5e9` (sky blue, distinct from existing indigo)
+- Add `"NEW in v2"` badge next to the section heading
+
+---
+
+## Pending Requirements
+
+---
+
+## 2. Bills & Checks Auto-Ingestion + Weekly Review Flow
+
+### Overview
+Expand auto-ingestion beyond retail receipts to capture bills, checks, and invoices across all spend categories — utilities, dining, medical, insurance, subscriptions, travel, and more. Pair with a weekly user-curated review notification so customers approve what stays in the system before it feeds analytics.
+
+**Roadmap slot:** Phase 4B (alongside browser extension) and Phase 4C (medical/insurance — after privacy infrastructure is established)  
+**Scope impact:** Transforms ReceiptIQ from a retail receipt tracker into a whole-life spend intelligence platform  
+**Version bump:** v2.0 → v3.0
+
+---
+
+### 2.1 Why This Matters
+
+Retail receipts currently captured by Phase 1–4 cover only a fraction of a person's real monthly spend. The uncaptured half lives in bills and checks:
+
+| Already Captured | Missing Without This Feature |
+|---|---|
+| Grocery & supermarket | Utility bills (electric, gas, water, internet) |
+| Electronics & retail | Restaurant & dining checks |
+| Medicine & pharmacy | Medical bills & insurance EOBs |
+| Online orders (Amazon etc.) | Insurance premiums (auto, health, home) |
+| Food delivery apps | Rent & mortgage statements |
+| | Phone & streaming subscriptions |
+| | Car services (parking, tolls, repairs) |
+| | Travel (hotels, airlines, Airbnb) |
+
+Without bills, the spending dashboard is structurally incomplete — a user could think they spend $1,200/month when their true outgoings are $3,800. The analytics, forecasting, and budget alerts all become misleading.
+
+---
+
+### 2.2 Bill & Check Categories — Phased Rollout
+
+Ship categories in order of parsing complexity and privacy sensitivity:
+
+#### Phase 4B — Start Here (structured, low sensitivity)
+| Category | Sources | Parsing Complexity |
+|---|---|---|
+| Restaurants & Dining | Square, Toast, OpenTable, Resy email receipts | Low — consistent email formats |
+| Subscriptions & Streaming | Netflix, Spotify, Apple, Google, Adobe email invoices | Very low — highly structured |
+| Travel | Airbnb, Booking.com, hotel folios, airline receipts, Uber/Lyft | Low-medium |
+| Parking & Tolls | SpotHero, ParkWhiz, EZPass email statements | Low |
+
+#### Phase 4C — Second Wave (semi-structured)
+| Category | Sources | Parsing Complexity |
+|---|---|---|
+| Utilities | Electric, gas, water, internet — PDF bills via email | Medium — varies by provider |
+| Phone Bills | AT&T, Verizon, T-Mobile, Mint Mobile | Medium |
+| Car Services | Mechanic invoices, dealership service PDFs | Medium-high |
+| Rent & HOA | Property management email statements | Medium |
+
+#### Phase 5 — Sensitive (requires privacy infrastructure + user trust)
+| Category | Sources | Parsing Complexity | Sensitivity |
+|---|---|---|---|
+| Medical Bills | Clinic invoices, hospital statements | High | High — treat as sensitive data |
+| Insurance EOBs | Health, auto, home insurer PDFs | Very high | High — HIPAA-adjacent |
+| Mortgage Statements | Lender PDFs | Medium | Medium |
+| Insurance Premiums | Auto, home, life email invoices | Medium | Medium |
+
+---
+
+### 2.3 Weekly Review Notification Flow
+
+Rather than silently auto-ingesting all bills, users get a weekly "inbox review" — a curated summary of what was captured that week, with one-tap approve/dismiss per item.
+
+#### Notification Design
+- **Cadence:** Weekly, user-configurable (can switch to daily or monthly)
+- **Delivery:** Push notification + in-app inbox + optional email digest
+- **Trigger:** Every Sunday evening (or user's preferred day)
+- **Copy example:** "📋 7 new bills captured this week — $843 total. Tap to review."
+
+#### Review Screen UX
+Each captured bill is shown as a card with:
+- Source icon (utility company logo, restaurant name, etc.)
+- Amount, date, category
+- Two actions: **✓ Keep** (added to analytics) or **✗ Dismiss** (deleted, never analyzed)
+- Optional: **Edit category** before keeping (in case auto-categorization was wrong)
+- Bulk action: "Keep all" / "Dismiss all" for power users
+
+#### Smart Batching Rules (to prevent review fatigue)
+- Group by category — don't show 12 individual Spotify charges; show "Subscriptions — 3 items, $47.97"
+- Surface high-value items first (sort by amount descending)
+- Auto-keep recurring bills the user has approved 3+ consecutive weeks (with setting to disable)
+- Auto-dismiss obvious duplicates before they reach the review screen
+- If fewer than 3 new bills in a week, skip the notification and batch into the following week
+
+#### Opt-out Modes
+Users can configure per source:
+- **Auto-keep** — always ingest without review (for trusted recurring bills like rent)
+- **Always review** — default for new sources
+- **Auto-dismiss** — never capture from this source (e.g. work expenses they don't want mixed in)
+
+---
+
+### 2.4 Privacy & Sensitivity Handling
+
+Bills carry more sensitive data than retail receipts — account numbers, policy numbers, medical information. Additional safeguards beyond what's defined in section 1.3:
+
+| Concern | Mitigation |
+|---|---|
+| Account numbers in utility bills | Detect and redact before storage — store last 4 digits only |
+| Medical bill line items | Flag as `sensitivity: 'medical'` — excluded from household shared view by default |
+| Insurance policy numbers | Redact before storage |
+| Bank/mortgage account numbers | Detect via regex, redact to last 4 |
+| EOB diagnosis codes | Do not extract or store — only capture total amount and provider name |
+| Raw PDF content | Parsed in-memory, discarded immediately — same policy as email HTML |
+
+**Medical data principle:** For Phase 5 medical bills, extract only: provider name, date, total amount billed, amount owed, insurance adjustment. Never extract diagnosis codes, procedure codes, or treatment descriptions.
+
+---
+
+### 2.5 New Bill-Specific Analytics Reports
+
+Add to the Analytics Reports section under a new "Bills & Recurring" category:
+
+- **Monthly Bills Overview** — total recurring obligations vs. discretionary spend
+- **Utility Spend Trend** — electric, gas, water month-over-month with seasonal overlay
+- **Subscription Audit** — all active subscriptions, monthly cost, last used date (where available), annual total
+- **Dining Out vs. Groceries** — split between restaurant spend and grocery spend over time
+- **Insurance Cost Tracker** — all premiums across policies, annual total, renewal dates
+- **True Monthly Obligations** — fixed bills as % of income (if income is set in profile)
+- **Travel Spend Summary** — flights, hotels, car rentals aggregated per trip (grouped by date proximity)
+- **Bill Due Date Calendar** — upcoming bills based on historical patterns, with estimated amounts
+
+---
+
+### 2.6 New Data Schema Additions
+
+#### Additive columns to `receipt_items` (for bill line items)
 ```
-id               (uuid, PK)
-email            (unique, indexed)
-password_hash
-display_name
-created_at
-subscription_tier
-household_id     (FK, nullable)
++ item_type ('product' | 'service' | 'bill_line' | 'fee' | 'tax')
++ sensitivity ('standard' | 'medical' | 'financial')
++ redacted (boolean, default false)
++ recurring_pattern_id (FK → recurring_patterns, nullable)
 ```
 
-### `receipts`
+#### New table: `recurring_patterns`
 ```
-id               (uuid, PK)
-user_id          (FK → users)
-store_name
-store_chain
-receipt_date
-total_amount
-currency
-image_url        (S3 key)
-raw_ocr_text
-created_at
-```
-
-### `receipt_items`
-```
-id                    (uuid, PK)
-receipt_id            (FK → receipts)
-user_id               (FK → users, denormalized for query speed)
-item_name
-item_name_normalized  (lowercase, stemmed)
-quantity
-unit
-unit_price
-line_total
+id (uuid, PK)
+user_id (FK → users)
+source_name (e.g. 'Con Edison', 'Netflix', 'Allstate')
 category
-brand                 (nullable)
-barcode               (nullable)
-created_at
+average_amount (float)
+frequency ('weekly' | 'monthly' | 'quarterly' | 'annual')
+last_seen_at
+auto_keep (boolean, default false)
+ingestion_source_id (FK → ingestion_sources, nullable)
 ```
 
-### `price_history`
+#### New table: `review_inbox`
 ```
-id                  (uuid, PK)
-item_name_normalized
-store_chain
-unit_price
-unit
+id (uuid, PK)
+user_id (FK → users)
+receipt_id (FK → receipts)
 captured_at
-source              ('receipt' | 'vendor_api' | 'ai_estimate')
-user_id             (nullable — global prices)
-```
-
-### `shopping_lists`
-```
-id               (uuid, PK)
-user_id          (FK → users)
-name
-created_at
-estimated_total
-list_items       (jsonb array)
+review_status ('pending' | 'kept' | 'dismissed')
+reviewed_at (nullable)
+week_batch (date — Sunday of the review week)
+auto_kept (boolean — true if kept via recurring_pattern auto-keep rule)
 ```
 
 ---
 
-## 8. Platform Strategy
+### 2.7 Roadmap Changes
 
-### 📱 Mobile App (iOS + Android via React Native + Expo)
-- Native camera for receipt scanning
-- Push notifications for budget alerts
-- Barcode scanner via device camera
-- Offline receipt queue (sync when online)
-- Bottom-tab navigation optimized for thumb reach
-- Home screen widgets for quick spend view
-- Face ID / Touch ID login
-- App Store + Google Play distribution
+**Phase 4B — add to existing items:**
+- Bills ingestion: restaurants, subscriptions, travel, parking
+- Weekly review notification flow (push + in-app)
+- Review inbox UI (keep / dismiss / edit category)
+- Auto-keep rules for recurring bills
+- `recurring_patterns` and `review_inbox` tables
 
-**Stack:** React Native · Expo · SQLite · React Query · Expo Camera
+**Phase 4C — new card:**
+- Bills ingestion: utilities, phone, rent, car services
+- Account number redaction engine
+- Bill due date calendar
+- "Bills & Recurring" analytics category (8 new reports)
+- Per-source auto-keep / always-review / auto-dismiss settings
 
-### 🖥️ Web Portal (Full-featured browser app)
-- Drag-and-drop receipt upload (batch)
-- Full analytics dashboard with advanced charts
-- Keyboard shortcuts for power users
-- Data export (CSV, PDF, Excel)
-- Multi-tab comparison views
-- Print-friendly report layouts
-- PWA installable on desktop
-- Admin panel for household managers
-
-**Stack:** Next.js 14 · React · TailwindCSS · Recharts · D3.js
-
-### Shared Architecture
-| Concern | Approach |
-|---|---|
-| **Shared Business Logic** | TypeScript shared packages for validation, formatting, and API calls — used by both web and mobile |
-| **Single API Backend** | One Node.js API serves both platforms. Feature flags for platform-specific behavior. |
-| **Real-time Sync** | WebSockets push receipt processing updates and budget alerts to both platforms simultaneously |
-| **Unified Auth** | JWT tokens work across web and mobile. Refresh token rotation. OAuth (Google, Apple) on both. |
-| **Design System** | Shared design tokens and component library. Consistent UX across web (shadcn) and mobile (NativeBase). |
-| **CI/CD Pipeline** | GitHub Actions deploys web to Vercel and mobile via Expo EAS Build + OTA updates simultaneously. |
+**Phase 5 — add to existing items:**
+- Medical bill ingestion (with sensitivity flagging)
+- Insurance EOB ingestion (amount + provider only — no diagnosis codes)
+- Mortgage statement ingestion
+- Medical data excluded from household shared view by default
 
 ---
 
-## 9. Delivery Roadmap
+### 2.8 Features Section Changes
 
-### Q1 2025 — Foundation
-- [ ] User auth (email + OAuth)
-- [ ] Receipt upload + Claude OCR
-- [ ] Line-item storage schema
-- [ ] Basic dashboard + category charts
-- [ ] React Native app skeleton
-- [ ] Core REST API
+**Phase 4 — Advanced:** add after the 3 auto-ingestion items already queued in section 1.9:
 
-### Q2 2025 — Intelligence
-- [ ] Item price history charts
-- [ ] Vendor price comparison (AI)
-- [ ] Store analytics deep-dive
-- [ ] Category trend reports
-- [ ] Inflation tracker
-- [ ] Mobile app feature parity
-
-### Q3 2025 — Smart Shopping
-- [ ] Shopping list estimator
-- [ ] Store optimization AI
-- [ ] Budget alerts (push/email)
-- [ ] Predictive spend forecasting
-- [ ] Barcode scanner
-- [ ] Household / family mode
-
-### Q4 2025 — Growth & Scale
-- [ ] CSV / PDF export
-- [ ] Mint / YNAB integration
-- [ ] FSA/HSA tax report
-- [ ] Subscription detection
-- [ ] Loyalty card tracker
-- [ ] Public API for partners
+4. **Bills & Checks Auto-Ingestion** — Automatically capture utility bills, restaurant checks, subscription invoices, travel receipts, and more from email. Covers the full picture of monthly spend, not just retail.
+5. **Weekly Review Inbox** — Every week, a curated notification shows everything captured. One tap to keep (feeds analytics) or dismiss (deleted). Smart batching groups recurring charges and surfaces high-value items first. Auto-keep rules for trusted recurring bills.
 
 ---
 
-## 10. Success Metrics
+### 2.9 Overview Section Changes
 
-| Metric | Target | Why It Matters |
-|---|---|---|
-| **Receipts Scanned** | 5,000 / month by Q2 | Validates OCR quality + user habit |
-| **Item Accuracy Rate** | > 95% OCR precision | Ensures analytics are trustworthy |
-| **Weekly Active Users** | > 40% of registered | Indicates genuine utility |
-| **Avg Receipts / User** | 8+ per month | Signals complete household use |
-| **Price Alerts Actioned** | > 30% click-through | Validates intelligence value |
-| **Shopping List Uses** | 3+ per active user/mo | Core differentiator usage |
-
----
-
----
-
-## 11. Weekly Email Digest
-
-> **Priority: Q1 — ship a basic version early.** Weekly emails solve the cold-start and habit problem directly. Instead of users needing to remember to open the app, intelligence comes to them. Done well, it becomes the reason they keep scanning receipts.
-
-### Why It Matters
-
-Most expense trackers die at week 2 when the novelty wears off. A well-crafted weekly email creates a small personal moment every Monday morning — *"here's what your money did last week"* — and pulls users back into the app with a concrete reason to act.
-
-### Email Contents (4–6 data points max)
-
-| Section | Content | Why It Works |
-|---|---|---|
-| **Weekly Spend Snapshot** | Total spent vs. last week and vs. your average | Instant context, no effort to interpret |
-| **Price Win of the Week** | "You bought olive oil at Costco — $2.40 cheaper than Target" | Makes users feel smart, reinforces scanning habit |
-| **Watch Out** | One category that spiked vs. usual | Creates mild urgency without being preachy |
-| **Top Item This Week** | Biggest single line item with price history | Surprising and personal |
-| **Savings Opportunity** | One item you regularly buy that's cheaper elsewhere | Tangible and actionable |
-| **Shopping List Nudge** | "Planning your weekly shop? Estimate your list →" | Direct CTA back into the app |
-
-### Framing Rules
-
-- Say **"You saved $18 vs. last week"** not "You spent $340" — positive framing drives opens
-- Never send if user has fewer than 3 scanned receipts — an empty email kills trust
-- Keep it scannable in under 30 seconds — this is a digest, not a newsletter
-- One clear CTA per email, always linking back into the app
-
-### Triggered Emails (beyond the weekly digest)
-
-| Trigger | Email | Timing |
-|---|---|---|
-| No scan in 5 days | Re-engagement nudge with last week's best insight | Day 5 of inactivity |
-| 80% of budget used | Budget warning with days remaining | Real-time |
-| Price drop detected | "Tide Pods are $4 cheaper at Costco this week" | Within 24hrs of detection |
-| Monthly rollover | Richer summary with full category breakdown | 1st of each month |
-| First receipt scanned | Welcome + what to expect next | Immediately |
-
-### Frequency & Cadence Logic
-
-| User State | Cadence |
-|---|---|
-| Active (3+ scans/week) | Weekly digest every Monday 7am (user local time) |
-| Semi-active (1–2 scans/week) | Weekly digest with re-engagement nudge |
-| Inactive (< 1 scan/week for 2 weeks) | Auto-downgrade to monthly summary |
-| Opted out | Triggered alerts only (budget warnings, price drops) |
-
-### Implementation
-
-```
-PostgreSQL query  →  aggregate user's week data
-        ↓
-Claude            →  generate 1–2 personalized insight sentences per user
-        ↓
-Resend / SendGrid →  React Email HTML template, personalised per user
-        ↓
-Cron job          →  Sunday 10pm UTC, delivered Monday morning in user's timezone
-```
-
-**Recommended stack:** Resend (transactional email API) + React Email (template authoring) — clean API, generous free tier, easy to preview templates in browser during development.
-
-### What Not to Do
-
-- Don't send all 35 reports — pick 4–6 data points max per email
-- Don't mirror the app UI in the email — summarize, then link to the full view
-- Don't send to users with no data — gate behind minimum 3 scanned receipts
-- Don't make it feel like a bill — frame around savings and wins, not raw spend totals
-
----
-
-*ReceiptIQ Product Plan v1.0 — Ready for implementation review*
+- Update description to mention bills, checks, and full-life spend intelligence
+- Add "Weekly Review" as a 7th user journey card: "📋 Weekly Review — See every bill and check captured this week → tap to keep or dismiss → only approved data feeds your analytics"
+- Update market gap list: add "No app captures the full picture — retail receipts + utility bills + restaurant checks + subscriptions + travel in one place"
