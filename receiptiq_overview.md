@@ -12,7 +12,9 @@
 - Connect Gmail or Outlook once and receipts from Amazon, Walmart, Costco, Target, DoorDash, Instacart, and 20+ retailers flow in automatically
 - Get a personal forwarding address (receipts@receiptiq.app) — forward any receipt email and it's ingested
 - Browser extension pulls full order history from Amazon and Costco on demand
-- Every Sunday, a notification shows all bills captured that week — tap to keep (goes into analytics) or dismiss
+- The moment a receipt or bill is detected, a push notification fires — tap **Keep** or **Dismiss** directly from the notification, no app open needed
+- If you don't act within 24 hours the receipt is auto-ingested automatically — silence means keep, and you can always remove it later
+- Every Sunday a weekly digest summarises everything captured that week with one-tap remove for anything auto-ingested
 
 ---
 

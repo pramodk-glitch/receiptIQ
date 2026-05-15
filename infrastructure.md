@@ -42,7 +42,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 | **S3** | Receipt image storage |
 | **Lambda** | OCR processing jobs — triggered when a receipt image lands in S3, pay per scan only |
 | **SES + API Gateway** | Inbound email ingestion for receipts@receiptiq.app (forward-to-email channel) |
-| **SNS** | Fan-out push notifications to APNs (Apple) and FCM (Google) |
+| **SNS** | Fan-out push notifications to APNs (Apple) and FCM (Google) — fires within 30–60 seconds of ingestion for instant Keep/Dismiss approval |
 | **SQS** | Background job queue for email parsing, backfill jobs, and notification scheduling |
 | **CloudFront** | CDN in front of S3 for fast receipt image delivery |
 | **Cognito** | OAuth (Google, Apple) — avoids building auth from scratch |
@@ -148,6 +148,9 @@ Straightforward to start. Query optimization on price history across millions of
 ### 6. iOS push notification background actions
 The inline Keep / Dismiss buttons in push notifications require a background fetch entitlement on iOS and careful handling of the UNNotificationResponse API. Allow extra time for App Store review with this entitlement.
 
+### 7. 24-hour auto-ingest timer reliability
+The Lambda function that fires after 24 hours of notification inaction must be reliable — a missed trigger means a receipt silently never gets ingested. Use SQS with a visibility timeout + dead-letter queue to guarantee delivery. Test failure scenarios explicitly.
+
 ---
 
 ## De-risking — What to Validate First
@@ -159,6 +162,7 @@ Before building any UI, validate these in order:
 3. **One real user scanning real receipts** — within the first 4 weeks of Phase 1, not a demo
 4. **Vendor price comparison feasibility** — spike this in week 2; don't assume it works at acceptable cost and accuracy
 5. **Push notification inline actions** — test on a real iOS device early; the simulator behaviour differs from production
+6. **24-hour auto-ingest reliability** — simulate missed Lambda triggers and confirm the dead-letter queue catches them before shipping to production
 
 ---
 
