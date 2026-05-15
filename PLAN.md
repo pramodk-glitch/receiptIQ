@@ -1,5 +1,17 @@
 # ReceiptIQ — Pending Changes Staging Plan
 
+## What is ReceiptIQ?
+
+ReceiptIQ is an AI-powered, multi-category expense tracker that turns receipts, bills, and checks into deep financial intelligence. It automatically captures every purchase — via camera scan, email ingestion, or browser extension — and provides item-level price history, cross-vendor price comparison, smart shopping list estimation, and 35+ analytics reports across spending, inflation, savings, and forecasting.
+
+Unlike existing apps that cover only groceries or only business expenses, ReceiptIQ tracks the full picture of a person's spend: retail, dining, utilities, subscriptions, travel, medicine, insurance, and more. The core differentiator is that no manual data entry is required — receipts flow in automatically from 20+ retailers via Gmail, Outlook, or a personal forwarding address, and bills are captured the moment they land in the user's inbox with an instant push notification for one-tap approval.
+
+**Platform:** iOS · Android · Web  
+**AI:** Powered by Claude (Vision OCR, price comparison, shopping list estimation)  
+**Stack:** React Native · Next.js · Node.js · PostgreSQL · AWS
+
+---
+
 > Changes queued here will be merged into `ReceiptIQ_ProductPlan.jsx` once all requirements are finalized.
 
 ---
