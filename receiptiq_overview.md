@@ -12,7 +12,7 @@
 - Connect Gmail or Outlook once and receipts from Amazon, Walmart, Costco, Target, DoorDash, Instacart, and 20+ retailers flow in automatically
 - Get a personal forwarding address (receipts@receiptiq.app) — forward any receipt email and it's ingested
 - Browser extension pulls full order history from Amazon and Costco on demand
-- The moment a receipt or bill is detected, a push notification fires — tap **Keep** or **Dismiss** directly from the notification, no app open needed
+- The moment a receipt or bill is detected, a push notification fires — tap **Keep** or **Dismiss** directly from the notification, no app open needed. Smart throttling batches same-day bills so you never get more than 3 notifications a day
 - If you don't act within 24 hours the receipt is auto-ingested automatically — silence means keep, and you can always remove it later
 - Every Sunday a weekly digest summarises everything captured that week with one-tap remove for anything auto-ingested
 
@@ -45,7 +45,7 @@
 
 ---
 
-## Analytics — 35+ reports including
+## Analytics — 40+ reports including
 - Monthly and annual spend by category
 - Dining out vs. groceries split over time
 - Subscription audit — every active subscription, true annual cost

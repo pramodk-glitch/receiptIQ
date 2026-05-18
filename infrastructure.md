@@ -22,11 +22,13 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 |---|---|---|
 | Phase 1 — Core | Auth, OCR scan, line-item storage, dashboard | 10–14 weeks |
 | Phase 2 — Intelligence | Price history, vendor comparison, inflation tracker | +8 weeks |
-| Phase 3 — Smart Shopping | List estimator, budget alerts, spend forecasting | +8 weeks |
-| Phase 4 — Auto-Ingestion + Bills | Gmail OAuth, email parsers, bills, weekly review, push notifications | +10 weeks |
-| Phase 5 — Full Life Spend | Medical bills, browser extension, retailer API partnerships | +12 weeks |
+| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting | +8 weeks |
+| Phase 4A — Email Ingestion | Gmail + Outlook OAuth, forward-to-email, top 12 retailer parsers, duplicate detection, consent screen | +6 weeks |
+| Phase 4B — Bills + Notifications | Bills ingestion (dining, subscriptions, travel, parking), instant push notifications with Keep/Dismiss, 24hr auto-ingest, weekly digest, browser extension | +8 weeks |
+| Phase 4C — Extended Bills | Utilities, phone, rent, car services, account number redaction engine, bill due date calendar, per-source notification preferences | +6 weeks |
+| Q1 2026 — Full Life Spend | Medical bills + EOBs (sensitivity flagging), inbox history backfill, 20+ retailer parsers, retailer API BD track begins | +12 weeks |
 
-**Total to full v1: 12–18 months** with a team of 3, assuming no major pivots.
+**Total to full v1: 14–20 months** with a team of 3, assuming no major pivots.
 
 ---
 
@@ -69,15 +71,26 @@ User (iOS / Android / Web)
                 │               │
                 │           SQS Queue
                 │               │
-                │           Lambda (OCR jobs / email parsing)
+                │           Lambda (OCR / email parsing / notification scheduler)
                 │               │
                 │           Claude API (Vision + Intelligence)
-                │
+                │               │
+                │     ┌─────────┴──────────┐
+                │     │  Notification flow  │
+                │     │  ─────────────────  │
+                │     │  Parse complete     │
+                │     │  → check rules      │
+                │     │  → SNS push fires   │
+                │     │  → await 24hrs      │
+                │     │  → auto-ingest if   │
+                │     │    no action taken  │
+                │     └─────────┬──────────┘
+                │               │
                 └── SNS → APNs (iOS push)
                        └── FCM (Android push)
 
 Inbound email:
-receipts@receiptiq.app → SES → API Gateway → Lambda → SQS → Parser
+receipts@receiptiq.app → SES → API Gateway → Lambda → SQS → Parser → Notification Scheduler
 ```
 
 ---
@@ -104,6 +117,51 @@ Merges to release → production deploy with manual approval gate
 - **Terraform** or **AWS CDK** — entire AWS setup version-controlled and reproducible
 - Separate stacks for networking, compute, database, and storage
 - Environment variables injected from Secrets Manager at deploy time
+
+---
+
+## Database Tables — New Additions
+
+All tables below are additive — no existing tables are modified destructively.
+
+| Table | Added in | Purpose |
+|---|---|---|
+| `ingestion_sources` | Requirement 1 | Stores OAuth tokens and connection config per user per source |
+| `ingestion_log` | Requirement 1 | Audit trail of every email parsed — confidence score, outcome, errors |
+| `recurring_patterns` | Requirement 2 | Tracks recurring bills for auto-keep rules and frequency detection |
+| `review_inbox` | Requirement 2 | Powers the weekly digest — tracks keep/dismiss/auto-ingest status per item |
+| `device_tokens` | Requirement 3 | APNs and FCM tokens per device per user for push delivery |
+| `notification_log` | Requirement 3 | Audit trail of every push sent — action taken, timing, fallback status |
+
+### Additive columns on existing tables
+
+**`receipts`** — ingestion source tracking:
+```
++ ingestion_source_id (FK → ingestion_sources, nullable)
++ auto_ingested (boolean, default false)
++ ingestion_confidence (float 0–1, nullable)
++ external_order_id (retailer order ID, nullable)
++ needs_review (boolean)
+```
+
+**`receipt_items`** — bill line item support:
+```
++ item_type ('product' | 'service' | 'bill_line' | 'fee' | 'tax')
++ sensitivity ('standard' | 'medical' | 'financial')
++ redacted (boolean, default false)
++ recurring_pattern_id (FK → recurring_patterns, nullable)
+```
+
+**`user_preferences`** — notification controls:
+```
++ notif_mode ('instant' | 'daily' | 'weekly' | 'off', default 'instant')
++ notif_amount_threshold (float, default 20.00)
++ notif_quiet_hours_enabled (boolean, default false)
++ notif_quiet_start (time, nullable)
++ notif_quiet_end (time, nullable)
++ notif_frequency_cap (int, default 3)
++ notif_grouping_window_hours (int, default 2)
+```
 
 ---
 
