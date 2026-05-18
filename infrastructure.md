@@ -22,7 +22,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 |---|---|---|
 | Phase 1 — Core | Auth, OCR scan, line-item storage, dashboard | 10–14 weeks |
 | Phase 2 — Intelligence | Price history, vendor comparison, inflation tracker | +8 weeks |
-| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting | +8 weeks |
+| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods | +8 weeks |
 | Phase 4A — Email Ingestion | Gmail + Outlook OAuth, forward-to-email, top 12 retailer parsers, duplicate detection, consent screen | +6 weeks |
 | Phase 4B — Bills + Notifications | Bills ingestion (dining, subscriptions, travel, parking), instant push notifications with Keep/Dismiss, 24hr auto-ingest, weekly digest, browser extension | +8 weeks |
 | Phase 4C — Extended Bills | Utilities, phone, rent, car services, account number redaction engine, bill due date calendar, per-source notification preferences | +6 weeks |
@@ -132,6 +132,8 @@ All tables below are additive — no existing tables are modified destructively.
 | `review_inbox` | Requirement 2 | Powers the weekly digest — tracks keep/dismiss/auto-ingest status per item |
 | `device_tokens` | Requirement 3 | APNs and FCM tokens per device per user for push delivery |
 | `notification_log` | Requirement 3 | Audit trail of every push sent — action taken, timing, fallback status |
+| `spending_periods` | Requirement 4 | User-named date ranges (trips, events) for custom report recall |
+| `saved_reports` | Requirement 4 | Cached report snapshots for fast reload and export |
 
 ### Additive columns on existing tables
 

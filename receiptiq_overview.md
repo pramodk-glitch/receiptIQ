@@ -53,6 +53,8 @@
 - Bill due date calendar with estimated amounts
 - Your true monthly obligations as a percentage of income
 - Next month's spend forecasted by AI
+- **Custom date range reports** — pick any start and end date, or use smart presets (last 30 days, this quarter, a specific trip). Get category breakdown, vs. prior period comparison, top merchants, price anomalies, and spend pace
+- **Labelled periods** — name and save any date range ("Italy Trip", "Holiday Season") for one-tap recall and period-vs-period comparison
 
 ---
 

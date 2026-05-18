@@ -23,6 +23,7 @@ Unlike existing apps that cover only groceries or only business expenses, Receip
 | 1 | Auto-Ingestion (retailers via email, browser extension, API) | v1.0 → v2.0 | Phase 4A, 4B + Q1 2026 | ✅ Specced |
 | 2 | Bills & Checks Auto-Ingestion + Weekly Review Flow | v2.0 → v3.0 | Phase 4B, 4C, Phase 5 | ✅ Specced |
 | 3 | Instant Push Notifications for Ingestion Approval | v3.0 → v3.1 | Phase 4B | ✅ Specced |
+| 4 | Custom Date Range Spending Pattern Reports | v3.1 → v3.2 | Phase 3 | ✅ Specced |
 
 *Additional requirements will be appended below as they are finalized.*
 
@@ -999,3 +1000,200 @@ Extends the flow defined in section 1.10:
 | Instant action rate | > 60% of notifications acted on within 1 hour | Validates real-time UX over weekly digest |
 | Notification disable rate | < 5% per month | Measures whether throttling is working |
 | Weekly digest removal rate | < 10% of auto-ingested items removed | Validates that auto-ingest matches user intent |
+
+---
+
+## 4. Custom Date Range Spending Pattern Reports
+
+### Overview
+Give users a flexible date range picker to generate on-demand spending pattern reports for any custom window — not just fixed weekly or monthly periods. Pairs with a preset library for common ranges and a labelled periods feature so users can tag and recall meaningful date windows (trips, events, pay periods) by name.
+
+**Roadmap slot:** Phase 3 (alongside analytics) — UI is straightforward, data already exists  
+**New section tab:** Extends existing "Analytics Reports" tab with a "Custom Report" entry point  
+**Version bump:** v3.1 → v3.2
+
+---
+
+### 4.1 Date Range Options
+
+#### Free-form picker
+- Start date + end date — any range, no minimum or maximum
+- Available on both mobile (native date picker) and web (calendar popover)
+- Range limited to dates within the user's data history
+
+#### Smart presets (one-tap shortcuts)
+| Preset | Description |
+|---|---|
+| Last 7 days | Rolling 7-day window ending today |
+| Last 30 days | Rolling 30-day window ending today |
+| Last 90 days | Rolling 90-day window ending today |
+| This month | Calendar month to date |
+| Last month | Full prior calendar month |
+| This quarter | Q1/Q2/Q3/Q4 to date |
+| Last quarter | Full prior quarter |
+| This year | Jan 1 to today |
+| Custom | Free-form date picker |
+
+#### Labelled periods
+Users can name and save any date range for quick recall:
+
+- "Italy Trip — Sep 3–17 2024"
+- "Holiday Season — Nov 25–Jan 5"
+- "Before the raise — Jan–Mar 2024"
+- Saved periods appear as one-tap shortcuts alongside the smart presets
+- Accessible from a "My Periods" section in the report builder
+
+---
+
+### 4.2 Report Contents
+
+Every custom date range report includes the following sections, generated in real time from the date range selected:
+
+#### Summary strip
+```
+Jan 12 – Feb 12, 2025  (31 days)
+Total spent:   $3,420.18
+Receipts:      47
+Stores visited: 12
+Daily average: $110.33
+```
+
+#### Category breakdown
+- Spend per category for the selected period
+- % of total spend per category
+- Bar chart sorted by amount descending
+- Compared to the equivalent prior period automatically (e.g. select Jan → auto-compares to Dec)
+
+#### Vs. equivalent prior period
+- Every metric compared to the same-length window immediately before the selected range
+- Delta shown as $ and % — green for down, red for up
+- Example: "Dining $510 → $623 (+$113, +22%) vs. prior period"
+
+#### Top merchants
+- Top 10 stores ranked by spend for that period
+- Amount, number of visits, average per visit
+
+#### Price anomalies
+- Items where you paid above your historical average during this window
+- Shows: item name, what you paid, your usual price, overpayment amount
+
+#### Day-of-week spend pattern
+- Total and average spend per day of week within the range
+- Highlights highest and lowest spend days
+
+#### Top 5 receipts
+- Largest single receipts in the period by total amount
+
+#### Pace indicator *(only shown if range includes today)*
+- "At this pace you'll spend $X this month"
+- Compared to monthly budget if set
+
+#### Upcoming bills *(only shown if range includes future dates or ends today)*
+- Bills expected in the next 7 days based on recurring patterns
+
+---
+
+### 4.3 Labelled Periods — Detail
+
+#### Creating a labelled period
+- From the date picker: select a range → tap "Save this period" → enter a name
+- From any report: tap "Save as period" in the report header
+- From the weekly digest: "Label this week" shortcut
+
+#### Using labelled periods
+- Appear in the preset list under "My Periods"
+- Can be compared against each other: "Italy Trip vs. Paris Trip"
+- Shown on the price history chart as shaded bands so you can see spend during an event on the timeline
+- Exportable as a named PDF or CSV report
+
+#### Auto-suggested periods *(Phase 5)*
+- System detects trip-like clusters (flight + hotel in a short window) and suggests "Looks like you took a trip Sep 3–17. Want to label it?"
+- Requires 3+ months of data to be reliable
+
+---
+
+### 4.4 Weekly Digest — Spending Patterns Addition
+
+The weekly digest email/notification gains a spending patterns block below the receipt list. Scannable in under 60 seconds:
+
+```
+📊 Week of Jan 12–18
+
+CAPTURED THIS WEEK                    $412.81
+  ✓ Kept: 8  |  Auto-ingested: 3  |  Dismissed: 1
+
+SPENDING PATTERNS
+  ↑ Dining up $43 vs. last week
+  ⚠ On pace for $3,800 this month — $600 over budget
+  💡 Eggs were $1.20 above your usual price at Whole Foods
+  📅 Con Edison bill expected around Jan 22
+
+                              [Open Custom Report ↗]
+```
+
+The "Open Custom Report" link deep-links into the app with the current week pre-selected as the date range.
+
+---
+
+### 4.5 New Data Schema
+
+#### New table: `spending_periods`
+```
+id (uuid, PK)
+user_id (FK → users)
+name (e.g. 'Italy Trip', 'Holiday Season')
+start_date
+end_date
+created_at
+color (hex — for chart shading, nullable)
+notes (nullable)
+auto_suggested (boolean, default false)
+```
+
+#### New table: `saved_reports`
+```
+id (uuid, PK)
+user_id (FK → users)
+spending_period_id (FK → spending_periods, nullable)
+start_date
+end_date
+report_type ('custom' | 'weekly_digest' | 'monthly')
+generated_at
+export_format (nullable — 'pdf' | 'csv')
+snapshot_data (jsonb — cached report output for fast reload)
+```
+
+---
+
+### 4.6 Features Section Changes
+
+**Phase 3 — Smart Shopping:** add one new feature:
+
+- **Custom Spending Reports** — Pick any date range or use smart presets (last 30 days, this quarter, custom). Get a full pattern report: category breakdown, vs. prior period comparison, top merchants, price anomalies, day-of-week patterns, and pace projection. Save and name any range as a labelled period for quick recall.
+
+**Phase 4 — Advanced:** update Weekly Digest description to mention spending patterns block and custom report deep-link.
+
+---
+
+### 4.7 Analytics Reports Section Changes
+
+Add one new report to **Forecasting & Planning** category:
+
+- **Custom Date Range Report** — on-demand spending pattern report for any date window. Includes category breakdown, prior period comparison, top merchants, price anomalies, day-of-week patterns, top receipts, and pace projection.
+
+Add new sub-section **My Periods** to the Analytics tab:
+
+- Saved labelled periods with one-tap report generation
+- Period-vs-period comparison view
+- Auto-suggested periods (Phase 5)
+
+---
+
+### 4.8 Success Metrics
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Custom report usage | > 25% of active users run one per month | Validates demand beyond fixed periods |
+| Labelled periods created | > 2 per active user within 90 days | Shows stickiness of the naming feature |
+| Preset usage vs. custom | > 50% use presets | Validates preset design covers common needs |
+| Report export rate | > 10% of reports exported | Measures value for budgeting / tax use cases |
