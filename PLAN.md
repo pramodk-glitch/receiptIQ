@@ -27,6 +27,7 @@ Unlike existing apps that cover only groceries or only business expenses, Receip
 | 5 | AI Spending Assistant — Conversational Chatbot | v3.2 → v4.0 | Phase 3 + Phase 4 | ✅ Specced |
 | 6 | Multi-Tenancy & International Expansion | v4.0 → v5.0 | Phase 1 (foundations) → Phase 5 | ✅ Specced |
 | 7 | Historical Data Ingestion | v5.0 → v5.1 | Phase 3 → Phase 5 | ✅ Specced |
+| 8 | Market Strategy & Feature Optimisation | v5.1 → v5.2 | All phases | ✅ Specced |
 
 *Additional requirements will be appended below as they are finalized.*
 
@@ -2167,3 +2168,250 @@ Add to market gap:
 | Avg historical records per import | > 200 items | Validates real data depth being added |
 | 30-day retention (users who imported) | > 15% higher than non-importers | Core hypothesis — history = stickiness |
 | Bulk scan accuracy | > 90% confidence on camera roll photos | OCR quality on non-ideal real-world images |
+
+---
+
+## 8. Market Strategy & Feature Optimisation
+
+### Overview
+Based on analysis of the current personal finance app market — including Mint's shutdown, Monarch Money's $20M+ ARR post-Mint, YNAB/Copilot positioning, app retention benchmarks, and user complaint patterns — this requirement captures strategic adjustments to the feature set, roadmap, and pricing before implementation begins.
+
+**Key market insight:** The Mint shutdown left 25M registered accounts without a home. The winners (Monarch at $99.99/year, YNAB at $109/year) all use bank aggregation via Plaid — merchant name, date, total. None of them do what ReceiptIQ does: line-item intelligence, price history per item, vendor comparison, shopping list AI. ReceiptIQ is not competing on their turf. It's doing something they cannot.
+
+**Version bump:** v5.1 → v5.2 (additive — no breaking changes to existing requirements)
+
+---
+
+### 8.1 Features to Add
+
+#### 8.1.1 Net Worth Tracking
+**Priority: High — add to Phase 2**
+
+Every successful personal finance app includes net worth tracking. Users who track net worth visit more often, stay longer, and convert to paid at higher rates. Monarch, Empower, Copilot, and YNAB all include this.
+
+- Connect bank accounts, investment accounts, credit cards via Plaid (already in stack for Req 7)
+- Show a single net worth number on the dashboard: assets − liabilities
+- Net worth over time chart (monthly snapshots)
+- Account balance breakdown: checking, savings, investments, credit cards, loans
+- ReceiptIQ's unique angle: overlay net worth with spend data — "your net worth dropped $340 this month, driven by $510 in dining overspend"
+
+**Implementation note:** Plaid's Balance product costs ~$0.05/connection/month on top of the Transactions product. Marginal cost per Pro user.
+
+#### 8.1.2 Plaid Bank Sync as Ongoing Live Feature
+**Priority: High — add to Phase 2 alongside net worth**
+
+Currently Plaid is planned only for historical import (Req 7). Promote it to a core ongoing feature: live bank and credit card transaction sync running continuously in the background, the same way Monarch works.
+
+- Every bank and card transaction synced daily (merchant + total, no line items)
+- Fills the spend picture for everything without a receipt — coffee shops, ATM withdrawals, transfers
+- Shown in analytics with a clear label: "Bank transaction — no line items available"
+- When a receipt IS scanned for the same merchant on the same day, merge the records automatically — enriching the bank transaction with line items
+- Creates a complete spending view: receipt-level detail where available, merchant-level everywhere else
+
+**This is the bridge between ReceiptIQ (receipt intelligence) and Monarch (full spending view) — ReceiptIQ becomes both.**
+
+#### 8.1.3 Goals Tracking
+**Priority: Medium — add to Phase 3**
+
+- Users set savings or spending goals: "Save $1,200 for a vacation by August", "Keep dining under $300/month"
+- Progress indicator shown on dashboard and in push notifications
+- Weekly check-in: "You're on track for your vacation goal — $340 saved of $1,200"
+- Goals linked to categories: a "dining budget" goal connects to the dining category analytics
+- Milestone celebrations (subtle — first goal completed, 3-month streak, etc.)
+
+#### 8.1.4 Gamification & Streaks
+**Priority: Medium — add to Phase 3**
+
+Finance apps with streaks and milestones show meaningfully lower 90-day churn. Cost to build is low; retention impact is high.
+
+- **Budget streak** — consecutive weeks under budget in a category: "🔥 6-week grocery streak"
+- **Scan streak** — consecutive weeks with at least one receipt scanned
+- **Savings milestone** — first time monthly spend drops below the previous month's average
+- **Import milestone** — first Amazon import, first Plaid connection, etc.
+- Weekly digest includes streak summary: "You're on a 4-week dining budget streak — keep it up"
+- Streaks shown on profile/settings page — social proof when sharing with household members
+
+#### 8.1.5 Tax Year Export & Summary
+**Priority: Medium — add to Phase 4**
+
+- One-tap "Generate my 2024 tax summary" PDF
+- Includes: total spend by category for the tax year, FSA/HSA eligible items flagged and totalled, subscription costs for the full year, business-eligible expenses (if user tags them), charitable purchases
+- Useful for: FSA/HSA reimbursement filing, freelancer expense tracking, general record-keeping
+- Creates a strong annual retention anchor — a reason to stay subscribed even for light users
+
+---
+
+### 8.2 Features to Remove or Deprioritise
+
+#### Remove: CCPA Data Requests
+**Remove from roadmap entirely.**
+
+45-day wait, messy and inconsistent export formats across retailers, and very low user uptake in practice. The effort-to-value ratio is poor. Users who want historical data from Walmart or Target are better served by the browser extension (when/if it ships) or by scanning existing paper receipts.
+
+#### Deprioritise: Browser Extension (Phase 5 only)
+**Move from Phase 4B to Phase 5.**
+
+High engineering effort, ToS legal risk (varies by retailer), and the email ingestion channel already covers most of the same retailers more cleanly. The browser extension provides marginal additional value once email OAuth, forward-to-email, and Amazon CSV import are live. Worth building eventually — not worth the risk and effort in Phase 4.
+
+#### Deprioritise: Loyalty Card Tracker (Phase 5 only)
+**Move from Phase 4 to Phase 5.**
+
+Niche feature — most users don't think about loyalty point value tracking. Adds onboarding complexity and support burden without driving primary retention. Build if users specifically request it post-launch.
+
+#### Deprioritise: Barcode Scanner (Phase 5 only)
+**Move from Phase 3 to Phase 5.**
+
+The barcode scanner use case (scan a product in store to check prices) is a different user behaviour from receipt capture. It competes with existing price comparison apps (Honey, Google Shopping). Not a primary driver of ReceiptIQ's value proposition. Deprioritise until Phase 5.
+
+---
+
+### 8.3 Features to Reframe
+
+#### Vendor Price Comparison — Crowd-Sourced First
+**Reframe how Phase 2 vendor comparison works.**
+
+The original spec assumes AI looks up live retail prices at Walmart, Target, Costco, Amazon. In practice, there is no clean API for this — it requires fragile web scraping, expensive third-party price feeds, or Claude's potentially stale knowledge.
+
+**Revised approach:**
+1. **Primary source: ReceiptIQ's own price database** — prices extracted from all users' scanned receipts (anonymised, store + item + price + date). As user count grows, this becomes a genuinely valuable and accurate crowd-sourced price feed for local stores
+2. **Secondary source: Claude's knowledge** — for items not yet in the price database, Claude estimates based on training data, clearly labelled as "estimated"
+3. **Future: retailer API / price feed partnerships** — when scale justifies the cost
+
+This approach:
+- Works from day one without any third-party dependency
+- Gets more accurate as user count grows (network effect)
+- Is completely ToS-compliant
+- Creates a proprietary data asset no competitor can replicate
+
+**Schema addition:**
+```
+price_history
+  + user_count (int — how many users have purchased this item at this store)
+  + is_estimated (boolean — true if Claude estimate, false if from receipts)
+  + confidence ('crowd_sourced' | 'ai_estimate' | 'retailer_api')
+```
+
+---
+
+### 8.4 Roadmap Changes
+
+#### Move Household Mode to Phase 2
+**Original:** Phase 4
+**New:** Phase 2
+
+Couples who both use the app have dramatically lower churn than solo users — switching costs double, engagement doubles, and word-of-mouth doubles. Monarch built for couples from day one and it is consistently cited as their strongest differentiator. Move household mode (shared account, multiple members, unified analytics) to Phase 2 alongside the intelligence features.
+
+Phase 2 household scope (simplified for earlier shipping):
+- Invite a household member via email
+- Both users' receipts appear in a shared view
+- Unified spending analytics across both members
+- "Yours / Mine / Ours" split view on dashboard
+
+Full household features (split contribution, admin panel, per-member budgets) remain Phase 4.
+
+#### Updated Roadmap
+
+| Quarter | Theme | Key Deliverables |
+|---|---|---|
+| **Q1 2025** | Foundation | Auth, receipt scanning, line-item storage, dashboard, mobile + web app |
+| **Q2 2025** | Intelligence + Household | Price history, crowd-sourced vendor comparison, inflation tracker, net worth tracking, Plaid bank sync (ongoing), household mode v1 |
+| **Q3 2025** | Smart Shopping + Goals | Shopping list AI (type or upload), budget alerts, goals tracking, gamification/streaks, custom date range reports, AI spending assistant |
+| **Q4 2025** | Auto-Ingestion + Bills | Gmail/Outlook OAuth, forward-to-email, bills ingestion, push notifications, weekly digest, tax year export |
+| **Q1 2026** | History + Scale | Amazon CSV import, bulk scan, Google Drive/Dropbox, full Plaid bank history, 20+ email parsers, household mode v2 (full features) |
+| **Phase 5 2026+** | Advanced | Medical bills, browser extension (ToS-reviewed), loyalty card tracker, barcode scanner, retailer OAuth partnerships |
+
+---
+
+### 8.5 Pricing Changes
+
+**Raise Pro from $4.99 to $6.99/month.** Raise Family from $7.99 to $9.99/month.
+
+Rationale:
+- Monarch charges $99.99/year ($8.33/month)
+- YNAB charges $109/year ($9.08/month)
+- ReceiptIQ at $6.99/month ($83.88/year) is still meaningfully cheaper than both while offering capabilities neither has
+- The 40% price increase improves unit economics dramatically — ramen profitable at ~12,000 users instead of ~22,000
+- Users migrating from Mint are already accustomed to paying for personal finance apps at $8–10/month
+- Lower price signals lower value — at $4.99 ReceiptIQ reads as a "basic" tool; at $6.99 it reads as premium
+
+**Updated tier pricing:**
+
+| Tier | Monthly | Annual | vs. Monarch | vs. YNAB |
+|---|---|---|---|---|
+| Free | $0 | $0 | — | — |
+| Pro | $6.99/mo | $59.99/yr | 40% cheaper | 45% cheaper |
+| Family | $9.99/mo | $89.99/yr | — | — |
+
+**Note:** Update all references to $4.99 and $7.99 in `pricing.md` and `receiptiq_overview.md`.
+
+---
+
+### 8.6 New Feature Schema Additions
+
+#### `net_worth_snapshots` (new table)
+```
+id (uuid, PK)
+user_id (FK → users)
+captured_at (date — daily snapshot)
+total_assets (float)
+total_liabilities (float)
+net_worth (float — computed: assets − liabilities)
+account_breakdown (jsonb — per-account balances)
+```
+
+#### `goals` (new table)
+```
+id (uuid, PK)
+user_id (FK → users)
+org_id (FK → organisations, nullable — shared household goals)
+goal_type ('save_amount' | 'category_budget' | 'reduce_spend' | 'custom')
+name (e.g. "Vacation fund", "Cut dining to $300/mo")
+target_amount (float)
+target_date (date, nullable)
+category (nullable — for category budget goals)
+current_amount (float — updated on each relevant ingestion)
+status ('active' | 'completed' | 'abandoned')
+created_at
+```
+
+#### `streaks` (new table)
+```
+id (uuid, PK)
+user_id (FK → users)
+streak_type ('budget' | 'scan' | 'savings' | 'import')
+category (nullable — for budget streaks)
+current_count (int — weeks/days)
+longest_count (int — all-time best)
+last_updated (date)
+active (boolean)
+```
+
+#### Additive columns to `price_history`
+```
++ user_count (int, default 1)
++ is_estimated (boolean, default false)
++ confidence ('crowd_sourced' | 'ai_estimate' | 'retailer_api')
+```
+
+---
+
+### 8.7 Files to Update
+
+- `pricing.md` — Pro $4.99 → $6.99, Family $7.99 → $9.99, all revenue/P&L projections, milestones, break-even, sensitivity analysis, annual plans, competitive table
+- `receiptiq_overview.md` — add net worth, goals, gamification; update pricing references
+- `infrastructure.md` — add `net_worth_snapshots`, `goals`, `streaks` to DB tables section; update Phase 2 timeline
+- Workflow SVG and architecture SVG — no changes needed (Plaid already shown; new tables are data-layer additions)
+
+---
+
+### 8.8 Success Metrics
+
+| Metric | Target | Rationale |
+|---|---|---|
+| 30-day retention | > 35% | Up from typical 29% industry average — history import + net worth tracking should lift this |
+| 90-day retention | > 20% | Streaks and goals create habit loops that sustain past day 30 |
+| Pro conversion | > 6% | Higher than 5% baseline — net worth + AI chat justify the price |
+| Household adoption | > 25% of Pro users | Couples cut churn in half |
+| Goals created per user | > 1.5 within 30 days | Validates emotional investment in the product |
+| Streak engagement | > 40% of active users have an active streak | Measures gamification effectiveness |
+| Net worth DAU | > 30% of users check net worth weekly | Validates it as a retention feature |

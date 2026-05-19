@@ -1,10 +1,15 @@
 # ReceiptIQ — Monetisation & Pricing Strategy
 
+> Updated per Requirement 8 (Market Strategy & Feature Optimisation).
+> Pro raised from $4.99 → $6.99/month. Family raised from $7.99 → $9.99/month.
+> Rationale: Monarch charges $8.33/month, YNAB charges $9.08/month.
+> ReceiptIQ at $6.99/month is still 40% cheaper than Monarch while offering capabilities neither has.
+
 ---
 
 ## Summary
 
-ReceiptIQ's infrastructure costs are low enough at Phase 1 scale that covering them requires very few paying users. The strategic question is not whether to charge, but **when** and **how** — and how to sequence free vs. paid to maximise both early adoption and long-term revenue.
+ReceiptIQ's infrastructure costs are low enough at Phase 1 scale that covering them requires very few paying users. The strategic question is not whether to charge, but when and how — and how to sequence free vs. paid to maximise both early adoption and long-term revenue.
 
 ---
 
@@ -26,16 +31,16 @@ These numbers are small enough that a founder can absorb them personally during 
 The freemium model is the right fit for ReceiptIQ because:
 - It removes signup friction — users try before they commit
 - Phase 1 free tier is genuinely useful (basic scanning + dashboard)
-- Phase 2 intelligence features (price history, vendor comparison) create a clear, defensible upgrade moment
+- Phase 2 intelligence features (price history, vendor comparison, net worth) create a clear, defensible upgrade moment
 - Industry standard for consumer finance apps is 3–8% freemium conversion — enough to cover costs at modest scale
 
 ### Tier Structure
 
-| Tier | Price | Target user |
-|---|---|---|
-| **Free** | $0/mo | Casual users, new signups |
-| **Pro** | $4.99/mo | Power users who want intelligence |
-| **Family** | $7.99/mo | Households with multiple members |
+| Tier | Monthly | Annual | vs. Monarch ($8.33/mo) | vs. YNAB ($9.08/mo) |
+|---|---|---|---|---|
+| **Free** | $0 | $0 | — | — |
+| **Pro** | $6.99/mo | $59.99/yr | 16% cheaper | 23% cheaper |
+| **Family** | $9.99/mo | $89.99/yr | — | — |
 
 ### What Each Tier Includes
 
@@ -47,62 +52,59 @@ The freemium model is the right fit for ReceiptIQ because:
 - Manual entry
 - Mobile + web access
 
-#### Pro — $4.99/mo
+#### Pro — $6.99/mo
 - Unlimited receipt scans
-- Full price history per item
+- Full price history per item (crowd-sourced + AI-estimated)
 - Cross-vendor price comparison
 - All 40+ analytics reports
-- Custom date range reports
-- Labelled spending periods
-- Budget alerts
-- Predictive spend forecasting
+- Custom date range reports + labelled spending periods
+- Net worth tracking (Plaid bank + investment sync)
+- Plaid bank sync — ongoing live transaction feed
+- Goals tracking + gamification streaks
+- Budget alerts + predictive spend forecasting
 - 12 months of receipt history
-- CSV / PDF export
+- CSV / PDF export + tax year summary
 - Auto-ingestion (Gmail, Outlook, forward-to-email)
 - Push notifications + weekly digest
 - Bills & checks ingestion
-- **AI Spending Assistant** — ask anything about your data in plain English
-- **Amazon order history CSV import** — years of history in one upload
-- **Bulk camera roll + cloud storage scan** — Google Drive, Dropbox
-- **Bank / credit card import** — Plaid transaction history (12–24 months)
+- AI Spending Assistant — ask anything about your data
+- Amazon order history CSV import
+- Bulk camera roll + cloud storage scan
+- Bank / credit card import — Plaid transaction history
 
-#### Family — $7.99/mo
+#### Family — $9.99/mo
 - Everything in Pro
 - Up to 5 household members
-- Shared analytics dashboard
-- Split-contribution view
-- Household budget management
+- Shared analytics dashboard ("Yours / Mine / Ours" view)
+- Shared goals and budgets
+- Per-member contribution tracking
+- Household net worth view
 - Unified receipt history across members
 
 ---
 
 ## Break-Even Analysis
 
-### At $4.99/mo (Pro)
+### At $6.99/mo (Pro)
 
 | Monthly infra cost | Paid users needed | As % of 1,000 users |
 |---|---|---|
-| $45 (pre-launch) | 9 | < 1% |
-| $140 (500 users) | 28 | 5.6% |
-| $285 (1,000 users) | 57 | 5.7% |
+| $45 (pre-launch) | 7 | < 1% |
+| $140 (500 users) | 20 | 4.0% |
+| $285 (1,000 users) | 41 | 4.1% |
 
-Industry freemium conversion for consumer finance apps: **3–8%**. Break-even at 5.7% is comfortably within the expected range.
+Break-even at 4.1% conversion is well within the 3–8% industry range.
 
-### At $2.99/mo (flat, no freemium)
-
-| Monthly infra cost | Paid users needed |
-|---|---|
-| $45 | 16 |
-| $140 | 47 |
-| $285 | 96 |
-
-### At $7.99/mo (Family, if majority adopt)
+### At $9.99/mo (Family, if majority adopt)
 
 | Monthly infra cost | Paid users needed |
 |---|---|
-| $45 | 6 |
-| $140 | 18 |
-| $285 | 36 |
+| $45 | 5 |
+| $140 | 14 |
+| $285 | 29 |
+
+### At $0/mo (fully free Phase 1)
+Founder absorbs $45–285/month for 10–14 weeks = **~$400–1,000 total out of pocket** to reach Phase 2 launch.
 
 ---
 
@@ -110,178 +112,23 @@ Industry freemium conversion for consumer finance apps: **3–8%**. Break-even a
 
 Assumes freemium model, 5% Pro conversion, 1% Family conversion, rest on Free.
 
-| Total users | Free | Pro ($4.99) | Family ($7.99) | Monthly revenue | Annual revenue |
-|---|---|---|---|---|---|
-| 100 | 94 | 5 | 1 | ~$33 | ~$396 |
-| 500 | 470 | 25 | 5 | ~$165 | ~$1,980 |
-| 1,000 | 940 | 50 | 10 | ~$329 | ~$3,948 |
-| 5,000 | 4,700 | 250 | 50 | ~$1,647 | ~$19,764 |
-| 10,000 | 9,400 | 500 | 100 | ~$3,294 | ~$39,528 |
-| 50,000 | 47,000 | 2,500 | 500 | ~$16,470 | ~$197,640 |
-
-Revenue becomes meaningful at 10,000+ users. The goal of Phase 1–2 is to get to 5,000–10,000 engaged users, not to generate significant revenue — that comes in Phase 3–4 when the intelligence and auto-ingestion features justify the Pro price clearly.
-
----
-
-## Pricing Timeline — When to Charge
-
-### Phase 1 — Go Free (Q1–Q2 2025)
-
-**Recommendation: Free only, no paid tiers yet.**
-
-Rationale:
-- Phase 1 doesn't include price history, vendor comparison, or auto-ingestion — the features that most justify paying
-- Asking $4.99/month for a basic receipt scanner with a dashboard is a hard sell
-- The goal is to get 200–500 real users scanning real receipts and generating feedback data
-- Infrastructure cost is $45–140/month — trivially absorbable as a founder
-
-Actions:
-- Launch free with no credit card required
-- Add a "Pro waitlist" in the app — let users express intent to pay without charging yet
-- Track which features free users ask for most — that data informs what goes in the paid tier
-
-### Phase 2 — Soft Launch Paid Tiers (Q2–Q3 2025)
-
-**Recommendation: Introduce Pro at $4.99/mo when price history and vendor comparison ship.**
-
-Rationale:
-- "See every price you've ever paid for any item, and where it's cheapest right now" is a clear, defensible value proposition
-- Waitlist users from Phase 1 convert at 2–3× the rate of cold users — they've already expressed intent
-- Grandfathering early users at a discounted rate ($2.99/mo for life) rewards early adopters and creates word-of-mouth
-
-Actions:
-- Email the Pro waitlist with a founder discount: $2.99/mo for life if they subscribe in the first 30 days
-- Keep Free tier generous enough that users stay engaged and refer friends
-- Introduce annual plan: $39.99/year (33% discount vs. monthly) to improve cash flow
-
-### Phase 3 — Full Pricing (Q3–Q4 2025)
-
-**Recommendation: Introduce Family tier when household mode ships.**
-
-- Family at $7.99/mo targets a different segment — households where multiple people shop
-- One Family subscription replaces what would otherwise be 2–3 individual Pro subscriptions
-- Annual Family plan: $69.99/year
-
----
-
-## Scan Limit Strategy (Free Tier)
-
-The 30 scan/month free limit needs careful calibration:
-
-| Limit | Risk | Benefit |
-|---|---|---|
-| Too low (< 15/mo) | Users hit the wall before they see value — churn before converting | Forces upgrade quickly |
-| Too high (> 50/mo) | Most users never need to upgrade — poor conversion | High user satisfaction |
-| 30/mo (recommended) | Average household generates 20–40 receipts/month — hits limit at moderate usage | Natural upgrade trigger |
-
-**Alternative: scanless free tier** — instead of limiting scans, limit history to 3 months and lock intelligence features. Users can scan unlimited receipts but can't see price trends or run analytics. This is a softer gate that creates ongoing value without frustrating new users immediately.
-
----
-
-## Claude API Cost Mitigation at Scale
-
-As the user base grows, Claude API costs scale with every scan and every chatbot turn. Mitigations to implement from Phase 1:
-
-### 1. Response caching
-- Hash every uploaded receipt image (SHA-256)
-- If the same image is uploaded again, return the cached extraction
-- Cost: near zero. Saves significantly when users re-upload or test
-
-### 2. Scan limits as a natural cost control
-- Free tier capped at 30 scans/month = max ~$0.60 in Claude API per free user per month
-- Pro tier unlimited — but Pro users are paying $4.99/month, so even 200 scans = $4 in API cost with $0.99 margin before AWS
-- At high Pro usage, introduce a soft cap of 500 scans/month with a notification (not a hard block) — very few users will ever hit this
-
-### 3. Tiered model quality
-- Free tier: Claude Haiku (faster, cheaper, ~4× less expensive) — sufficient for basic line-item extraction
-- Pro tier: Claude Sonnet (higher accuracy, better for complex receipts, medical bills, handwritten items)
-- AI Spending Assistant: Claude Sonnet always — accuracy is non-negotiable for financial data
-- Estimated saving: reduces free-tier API cost by ~75%
-
-### 4. Chatbot cost control (Phase 3+)
-- AI Spending Assistant is Pro-only — free users never generate chatbot costs
-- Context injection is pre-computed server-side and cached for 15 minutes — repeated questions in a session reuse the same context without re-fetching
-- Conversation history is summarised after 10 turns rather than passing full history — keeps token counts bounded
-- Estimated chatbot cost per active Pro user: ~$0.35/month — well within the $4.99 Pro margin
-
----
-
-## Competitive Pricing Context
-
-| App | Price | What it offers |
-|---|---|---|
-| Expensify | $4.99–$9/mo | Business expense management |
-| Skwad | Freemium | Household budgeting |
-| YNAB | $14.99/mo | Budgeting only, no receipt scanning |
-| Mint (now defunct) | Free | Basic budgeting, no scanning |
-| Copilot | $13.99/mo | Bank-linked budgeting, no scanning |
-| **ReceiptIQ Pro** | **$4.99/mo** | Full receipt intelligence + bills + price comparison |
-
-At $4.99/month, ReceiptIQ is priced below YNAB and Copilot while offering capabilities neither provides (receipt scanning, price comparison, vendor intelligence). The price point is defensible and leaves room to move to $6.99–7.99 as the feature set matures.
-
----
-
-## Annual Plan Strategy
-
-Offering annual plans improves cash flow and reduces churn.
-
-| Tier | Monthly | Annual | Saving | Cash upfront |
+| Total users | Free | Pro ($6.99) | Family ($9.99) | Monthly revenue |
 |---|---|---|---|---|
-| Pro | $4.99/mo | $39.99/yr | 33% | $39.99 |
-| Family | $7.99/mo | $69.99/yr | 27% | $69.99 |
-
-Target: 40% of paying users on annual plans within 12 months of launch. Annual users churn at roughly half the rate of monthly users.
-
----
-
-## Users Needed to Cover Infrastructure — Quick Reference
-
-Assumes $4.99/mo Pro, 5% conversion, mixed monthly/annual.
-
-| Break-even goal | Paid users needed | Total users needed (at 5% conversion) |
-|---|---|---|
-| Cover pre-launch infra ($45/mo) | 9 | ~180 |
-| Cover 500-user infra ($140/mo) | 28 | ~560 |
-| Cover 1,000-user infra ($285/mo) | 57 | ~1,140 |
-| First $1,000/mo revenue | 200 | ~4,000 |
-| First $5,000/mo revenue | 1,001 | ~20,000 |
-| Ramen profitable (solo founder) | ~2,000 | ~40,000 |
-
-**Key insight:** infrastructure break-even is not the hard part. Getting to 200 paying users is the milestone that matters — it proves willingness to pay and funds continued development. Getting to 2,000 paying users (~40,000 total) is what makes this a sustainable solo or small-team business.
+| 100 | 94 | 5 | 1 | $44.94 |
+| 250 | 235 | 12 | 2 | $103.86 |
+| 500 | 470 | 25 | 5 | $224.70 |
+| 1,000 | 940 | 50 | 10 | $449.40 |
+| 2,500 | 2,350 | 125 | 25 | $1,123.50 |
+| 5,000 | 4,700 | 250 | 50 | $2,247.00 |
+| 10,000 | 9,400 | 500 | 100 | $4,494.00 |
+| 25,000 | 23,500 | 1,250 | 250 | $11,235.00 |
+| 50,000 | 47,000 | 2,500 | 500 | $22,470.00 |
 
 ---
 
-## Profit & Loss Projections — 100 to 50,000 Users
+## Cost Breakdown by Scale
 
-Assumptions:
-- **Conversion:** 5% Pro ($4.99/mo), 1% Family ($7.99/mo), 94% Free
-- **Claude API:** ~$0.016 per scan, avg 5 scans/month per free user, 20 scans/month per Pro/Family user
-- **Haiku for free tier** (75% cheaper), **Sonnet for Pro/Family**
-- **AWS + third-party costs** scaled per the Phase 1 cost breakdown
-- **Apple Developer:** $8/mo fixed
-- Figures are monthly unless stated
-
----
-
-### User & Revenue Breakdown
-
-| Total Users | Free | Pro (5%) | Family (1%) | Monthly Revenue |
-|---|---|---|---|---|
-| 100 | 94 | 5 | 1 | $32.94 |
-| 250 | 235 | 12 | 2 | $75.86 |
-| 500 | 470 | 25 | 5 | $164.75 |
-| 1,000 | 940 | 50 | 10 | $329.50 |
-| 2,500 | 2,350 | 125 | 25 | $823.75 |
-| 5,000 | 4,700 | 250 | 50 | $1,647.50 |
-| 10,000 | 9,400 | 500 | 100 | $3,295.00 |
-| 25,000 | 23,500 | 1,250 | 250 | $8,237.50 |
-| 50,000 | 47,000 | 2,500 | 500 | $16,475.00 |
-
----
-
-### Cost Breakdown by Scale
-
-| Total Users | AWS | Claude API | Apple/Other | Total Costs |
+| Total users | AWS | Claude API | Apple/Other | Total costs |
 |---|---|---|---|---|
 | 100 | $34 | $8 | $8 | $50 |
 | 250 | $34 | $18 | $8 | $60 |
@@ -293,76 +140,163 @@ Assumptions:
 | 25,000 | $1,400 | $1,600 | $80 | $3,080 |
 | 50,000 | $2,500 | $3,200 | $80 | $5,780 |
 
-*AWS costs reflect infrastructure scaling: larger RDS, Fargate autoscaling, ElastiCache cluster growing with user base. Claude API costs assume Haiku for free-tier scans and Sonnet for Pro/Family.*
-
 ---
 
-### Profit & Loss
+## Profit & Loss Projections — 100 to 50,000 Users
 
-| Total Users | Monthly Revenue | Monthly Costs | Monthly P&L | Annual P&L |
+| Total users | Monthly revenue | Monthly costs | Monthly P&L | Annual P&L |
 |---|---|---|---|---|
-| 100 | $32.94 | $50 | **-$17** | **-$204** |
-| 250 | $75.86 | $60 | **+$16** | **+$192** |
-| 500 | $164.75 | $123 | **+$42** | **+$504** |
-| 1,000 | $329.50 | $246 | **+$84** | **+$1,008** |
-| 2,500 | $823.75 | $473 | **+$351** | **+$4,212** |
-| 5,000 | $1,647.50 | $829 | **+$819** | **+$9,828** |
-| 10,000 | $3,295.00 | $1,449 | **+$1,846** | **+$22,152** |
-| 25,000 | $8,237.50 | $3,080 | **+$5,158** | **+$61,896** |
-| 50,000 | $16,475.00 | $5,780 | **+$10,695** | **+$128,340** |
+| 100 | $44.94 | $50 | **-$5** | **-$60** |
+| 250 | $103.86 | $60 | **+$44** | **+$528** |
+| 500 | $224.70 | $123 | **+$102** | **+$1,224** |
+| 1,000 | $449.40 | $246 | **+$203** | **+$2,436** |
+| 2,500 | $1,123.50 | $473 | **+$651** | **+$7,812** |
+| 5,000 | $2,247.00 | $829 | **+$1,418** | **+$17,016** |
+| 10,000 | $4,494.00 | $1,449 | **+$3,045** | **+$36,540** |
+| 25,000 | $11,235.00 | $3,080 | **+$8,155** | **+$97,860** |
+| 50,000 | $22,470.00 | $5,780 | **+$16,690** | **+$200,280** |
 
 ---
 
-### Key Milestones
+## Key Milestones
 
 | Milestone | Happens at | Monthly P&L |
 |---|---|---|
-| **Break-even** | ~220 users | ~$0 |
-| **First $100/mo profit** | ~500 users | +$42 |
-| **First $1,000/mo profit** | ~6,500 users | +$1,000 |
-| **Ramen profitable** (solo founder ~$3,500/mo) | ~22,000 users | +$3,500 |
-| **Small team profitable** (3 people ~$15,000/mo) | ~50,000 users | +$10,695 |
-| **Fundable / acquirable revenue** ($1M ARR) | ~170,000 users | +$83,000/mo |
+| **Break-even** | ~175 users | ~$0 |
+| **First $100/mo profit** | ~450 users | +$102 |
+| **First $1,000/mo profit** | ~5,000 users | +$1,418 |
+| **Ramen profitable** (solo founder ~$3,500/mo) | ~12,000 users | +$3,045–3,500 |
+| **Small team profitable** (3 people ~$15,000/mo) | ~40,000 users | +$13,000+ |
+| **Fundable / acquirable revenue** ($1M ARR) | ~180,000 users | +$83,000/mo |
+
+> **Pricing impact:** Raising from $4.99 to $6.99/month cuts the path to ramen profitable nearly in half — from ~22,000 users to ~12,000. The higher price signals premium positioning and aligns with market expectations set by Monarch ($8.33/mo) and YNAB ($9.08/mo).
 
 ---
 
-### What the Numbers Tell You
+## What the Numbers Tell You
 
-**At 100 users — -$17/mo**
-You're losing $17/month. That's not a concern — it costs less than a Netflix subscription to run a live product with real users. The goal here is feedback, not profit.
+**At 100 users — -$5/mo**
+Losing $5/month — negligible. Cheaper than a streaming subscription to run a live product with real users. Goal here is feedback, not profit.
 
-**At 220 users — breakeven**
-This is the first real milestone. Roughly 11 paying Pro users cover your costs entirely. At this point the product is self-funding.
+**At 175 users — breakeven**
+7 paying Pro users cover all infrastructure costs. Product is self-funding from here.
 
-**At 1,000 users — +$84/mo**
-Modest but meaningful. You've proven the model works. The product funds its own hosting with a small surplus. Reinvest in features.
+**At 1,000 users — +$203/mo**
+Modest but meaningful. Model works. Reinvest in features to accelerate growth.
 
-**At 5,000 users — +$819/mo**
-Starting to feel like a real business. This covers a part-time contractor for ongoing development, or funds marketing to accelerate growth.
+**At 5,000 users — +$1,418/mo**
+Real side income. Funds one part-time contractor or meaningful marketing spend.
 
-**At 10,000 users — +$1,846/mo**
-A solid side income for a solo founder. Enough to fund one junior contractor full-time. Growth at this stage becomes self-reinforcing if you reinvest.
+**At 12,000 users — ~ramen profitable**
+Full-time income for a solo founder in most cities. Half the users needed vs. the $4.99 model.
 
-**At 25,000 users — +$5,158/mo**
-A full-time income for a solo founder in most cities. The product is now a real business.
+**At 25,000 users — +$8,155/mo**
+Supports 2 people comfortably. Growth is now self-reinforcing if profits are reinvested.
 
-**At 50,000 users — +$10,695/mo**
-Supports a small team of 2–3 people. At this point you're likely raising a seed round or considering acquisition offers.
+**At 50,000 users — +$16,690/mo**
+Small team of 3. At this point raising a seed round or fielding acquisition interest.
 
 ---
 
-### Sensitivity Analysis — What If Conversion Is Higher or Lower?
-
-At 1,000 users, varying the Pro conversion rate:
+## Sensitivity Analysis — At 1,000 Users, Varying Conversion
 
 | Pro conversion | Paying users | Monthly revenue | Monthly P&L |
 |---|---|---|---|
-| 2% (pessimistic) | 20 | $131.80 | **-$114** |
-| 5% (base case) | 50 | $329.50 | **+$84** |
-| 8% (optimistic) | 80 | $527.20 | **+$281** |
-| 12% (best case) | 120 | $790.80 | **+$545** |
+| 2% (pessimistic) | 20 | $179.70 | **-$66** |
+| 5% (base case) | 50 | $449.40 | **+$203** |
+| 8% (optimistic) | 80 | $719.10 | **+$473** |
+| 12% (best case) | 120 | $1,078.70 | **+$833** |
 
-The business is very sensitive to conversion rate in the early stages. A 2% conversion at 1,000 users means you're still losing money. An 8% conversion — entirely achievable with strong product-market fit — means $281/month in profit at the same user count. **This is why the Pro waitlist during Phase 1 matters** — it pre-qualifies users who intend to pay, pushing your effective conversion rate well above the 5% industry average.
+Even at 2% conversion (pessimistic), losses are only $66/month — trivially absorbable. The upside at 8–12% conversion is substantial. **The Pro waitlist during Phase 1 pre-qualifies users with intent to pay, pushing effective conversion well above the 5% average.**
+
+---
+
+## Pricing Timeline — When to Charge
+
+### Phase 1 — Go Free (Q1–Q2 2025)
+Free only, no paid tiers. Infrastructure costs ~$50/month — trivially absorbable. Goal: 200–500 engaged users, feedback data, Pro waitlist.
+
+### Phase 2 — Launch Pro at $6.99/mo (Q2–Q3 2025)
+Price history, vendor comparison, net worth tracking, and Plaid bank sync ship. These justify charging. Waitlist converts at 2–3× cold users.
+
+**Founder discount:** first 30 days on the waitlist get $4.99/mo for life. Rewards early adopters, drives word-of-mouth.
+
+### Phase 3 — Introduce Family at $9.99/mo (Q3–Q4 2025)
+Household mode v1 ships in Phase 2 — introduce the Family tier alongside it. One Family subscription replaces 2 individual Pro subscriptions.
+
+### Phase 4 — Full Pricing + Annual Plans (Q4 2025+)
+Push annual plan adoption. Target 40% of paying users on annual plans within 12 months — annual users churn at roughly half the rate of monthly users.
+
+---
+
+## Annual Plan Strategy
+
+| Tier | Monthly | Annual | Saving | Cash upfront |
+|---|---|---|---|---|
+| Pro | $6.99/mo | $59.99/yr | 28% | $59.99 |
+| Family | $9.99/mo | $89.99/yr | 25% | $89.99 |
+
+---
+
+## Competitive Pricing Context
+
+| App | Price | What it offers | Differentiator |
+|---|---|---|---|
+| Mint (RIP) | Free | Budgeting, bank sync | Dead — 25M users displaced |
+| Monarch Money | $99.99/yr ($8.33/mo) | Bank sync, budgeting, net worth, couples | Post-Mint winner, $20M+ ARR |
+| YNAB | $109/yr ($9.08/mo) | Zero-based budgeting methodology | Loyal community, behaviour change |
+| Copilot | ~$95/yr | Apple-only, AI categorisation | Best design, iOS/Mac only |
+| Quicken Simplifi | ~$47/yr | Basic budgeting, bank sync | Cheapest paid option |
+| **ReceiptIQ Pro** | **$59.99/yr ($6.99/mo)** | Receipt intelligence + bills + price comparison + AI chat + net worth | **Only app with line-item price history** |
+
+ReceiptIQ is priced between Simplifi and Monarch — positioned as premium but accessible, and the only app that does something none of the others can.
+
+---
+
+## Claude API Cost Mitigation at Scale
+
+### 1. Response caching
+Hash every uploaded receipt image. Same image uploaded twice returns cached extraction — no API call.
+
+### 2. Scan limits as cost control
+Free tier: 30 scans/month = max ~$0.50 Claude API per free user per month.
+Pro: unlimited, but Pro users pay $6.99/month — even 300 scans/month = ~$4.80 in API cost with $2.19 margin before AWS.
+
+### 3. Tiered model quality
+- Free: Claude Haiku (~75% cheaper) — sufficient for standard line-item extraction
+- Pro: Claude Sonnet — higher accuracy for complex receipts, medical bills, handwritten items
+- AI Spending Assistant: Claude Sonnet always — accuracy is non-negotiable for financial data
+
+### 4. Chatbot cost control
+- AI Spending Assistant is Pro-only — free users never generate chatbot costs
+- Context injection pre-computed and cached for 15 minutes per session
+- Conversation history summarised after 10 turns to bound token counts
+- Estimated chatbot cost per active Pro user: ~$0.35/month — well within $6.99 margin
+
+---
+
+## Historical Import Tier Limits
+
+| Tier | Bulk scan | Amazon CSV | Plaid (ongoing) | Cloud storage |
+|---|---|---|---|---|
+| Free | 30 historical scans | ✗ | ✗ | ✗ |
+| Pro | Unlimited | ✓ | ✓ | ✓ |
+| Family | Unlimited (per member) | ✓ | ✓ per member | ✓ |
+
+---
+
+## Users Needed to Cover Infrastructure — Quick Reference
+
+At $6.99/mo Pro, 5% conversion, mixed monthly/annual.
+
+| Break-even goal | Paid users needed | Total users (at 5% conversion) |
+|---|---|---|
+| Cover pre-launch infra ($45/mo) | 7 | ~140 |
+| Cover 500-user infra ($140/mo) | 20 | ~400 |
+| Cover 1,000-user infra ($285/mo) | 41 | ~820 |
+| First $1,000/mo revenue | 143 | ~2,860 |
+| First $5,000/mo revenue | 715 | ~14,300 |
+| Ramen profitable (solo founder) | ~500 | ~12,000 |
 
 ---
 
@@ -371,6 +305,6 @@ The business is very sensitive to conversion rate in the early stages. A 2% conv
 | Phase | Pricing | Goal |
 |---|---|---|
 | Phase 1 (Q1–Q2 2025) | Free only + Pro waitlist | 200–500 engaged users, feedback data |
-| Phase 2 (Q2–Q3 2025) | Free + Pro $4.99/mo | 50+ paying users, prove willingness to pay |
-| Phase 3 (Q3–Q4 2025) | Free + Pro + Family $7.99/mo | 200+ paying users, cover all costs |
+| Phase 2 (Q2–Q3 2025) | Free + Pro $6.99/mo | 50+ paying users, prove willingness to pay |
+| Phase 3 (Q3–Q4 2025) | Free + Pro + Family $9.99/mo | 200+ paying users, cover all costs |
 | Phase 4 (Q4 2025+) | Full pricing + annual plans | 1,000+ paying users, growth mode |

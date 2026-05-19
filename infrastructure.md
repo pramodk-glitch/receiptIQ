@@ -21,7 +21,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 | Phase | What ships | Estimated duration |
 |---|---|---|
 | Phase 1 — Core | Auth, OCR scan, line-item storage, dashboard | 10–14 weeks |
-| Phase 2 — Intelligence | Price history, vendor comparison, inflation tracker | +8 weeks |
+| Phase 2 — Intelligence + Household | Price history, crowd-sourced vendor comparison, inflation tracker, net worth tracking, Plaid bank sync (ongoing), household mode v1 | +8 weeks |
 | Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods, AI spending assistant (chat), Amazon CSV import, bulk camera roll scan, history onboarding flow | +8 weeks |
 | Phase 4A — Email Ingestion | Gmail + Outlook OAuth, forward-to-email, top 12 retailer parsers, duplicate detection, consent screen | +6 weeks |
 | Phase 4B — Bills + Notifications | Bills ingestion (dining, subscriptions, travel, parking), instant push notifications with Keep/Dismiss, 24hr auto-ingest, weekly digest, browser extension | +8 weeks |
@@ -206,6 +206,9 @@ All tables below are additive — no existing tables are modified destructively.
 | `ai_chat_sessions` | Requirement 5 | Tracks conversation sessions per user |
 | `ai_chat_log` | Requirement 5 | Full audit trail of every chat turn — SQL generated, tokens, cost |
 | `historical_imports` | Requirement 7 | Tracks bulk import jobs — status, progress, date range, error log |
+| `net_worth_snapshots` | Requirement 8 | Daily net worth snapshots — assets, liabilities, per-account breakdown |
+| `goals` | Requirement 8 | User-defined savings and spending goals with progress tracking |
+| `streaks` | Requirement 8 | Budget, scan, and savings streaks — current count and all-time best |
 
 ### Additive columns on existing tables
 
