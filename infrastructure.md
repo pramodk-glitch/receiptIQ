@@ -57,40 +57,88 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 - Points to the ECS API via environment variable
 
 ### Architecture diagram
-```
-User (iOS / Android / Web)
-        │
-        ├── Vercel (Next.js web)
-        │
-        └── CloudFront → ECS Fargate (Node.js API)
-                                │
-                ┌───────────────┼───────────────┐
-                │               │               │
-           RDS Postgres    ElastiCache     S3 (images)
-           + TimescaleDB     Redis
-                │               │
-                │           SQS Queue
-                │               │
-                │           Lambda (OCR / email parsing / notification scheduler)
-                │               │
-                │           Claude API (Vision + Intelligence)
-                │               │
-                │     ┌─────────┴──────────┐
-                │     │  Notification flow  │
-                │     │  ─────────────────  │
-                │     │  Parse complete     │
-                │     │  → check rules      │
-                │     │  → SNS push fires   │
-                │     │  → await 24hrs      │
-                │     │  → auto-ingest if   │
-                │     │    no action taken  │
-                │     └─────────┬──────────┘
-                │               │
-                └── SNS → APNs (iOS push)
-                       └── FCM (Android push)
 
-Inbound email:
-receipts@receiptiq.app → SES → API Gateway → Lambda → SQS → Parser → Notification Scheduler
+```mermaid
+graph TD
+    subgraph AWS["☁️ AWS Infrastructure"]
+        subgraph UF["User-facing layer"]
+            W["🖥️ Web app\nNext.js 14 · Vercel · PWA"]
+            M["📱 Mobile app\nReact Native · Expo · iOS / Android"]
+        end
+
+        subgraph APP["Application layer"]
+            API["⚙️ API server\nECS Fargate · Node.js"]
+            MB["📨 Message bus\nSNS · SQS · SES"]
+            LMB["⚡ Lambda jobs\nOCR · email parse · 24hr timer"]
+            CL["🧠 Claude AI\nVision · reasoning · Text-to-SQL"]
+        end
+
+        subgraph DATA["Data layer"]
+            PG["🗄️ PostgreSQL\nPrimary DB · Row-Level Security"]
+            RD["⚡ Redis\nCache · rate limiting · queues"]
+            S3["🪣 S3\nReceipt images · CloudFront CDN"]
+            TS["📈 TimescaleDB\nPrice history · time-series"]
+        end
+    end
+
+    subgraph EXT["External services"]
+        ST["💳 Stripe\nBilling · Stripe Tax · local payments"]
+        SG["📧 SendGrid\nInbound parse · forward-to-email"]
+        AF["🔔 Apple / Firebase\nAPNs · FCM push notifications"]
+    end
+
+    W -->|HTTPS requests| API
+    M -->|HTTPS requests| API
+    API -->|OCR jobs| LMB
+    API -->|queue jobs| MB
+    LMB -->|Vision OCR| CL
+    MB -->|push| AF
+    API -->|read/write| PG
+    API -->|cache| RD
+    API -->|store images| S3
+    LMB -->|price history| TS
+    API -->|billing| ST
+    SG -->|parsed emails| LMB
+```
+
+---
+
+### Workflow diagram
+
+```mermaid
+flowchart TD
+    A["📷 Camera scan"]
+    B["📧 Gmail / Outlook\nauto-ingestion"]
+    C["📨 Forward email\nreceipts@receiptiq.app"]
+    D["🧩 Browser extension\nAmazon · Costco · Walmart"]
+
+    A --> P
+    B --> P
+    C --> P
+    D --> P
+
+    P["🧠 AI processing\nClaude Vision OCR · parse · deduplicate · confidence score"]
+
+    P --> N["🔔 Push notification fired\nwithin 30–60 seconds"]
+
+    N --> K["✅ User keeps\nTap ✓ in notification"]
+    N --> X["❌ User dismisses\nTap ✗ — receipt deleted"]
+    N --> AU["⏱ No action — 24 hours\nAuto-ingested (silence = keep)"]
+
+    K --> DB["🗄️ Receipt stored in database\nPostgreSQL · line items · price history updated"]
+    AU --> DB
+
+    DB --> AN["📊 Analytics\n40+ reports"]
+    DB --> AI["🤖 AI spending chat\nask anything about your data"]
+    DB --> WD["📋 Weekly digest\npatterns · captured items · insights"]
+
+    style X fill:#fee2e2,stroke:#fca5a5,color:#7f1d1d
+    style P fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    style N fill:#fef3c7,stroke:#fcd34d,color:#78350f
+    style DB fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style AN fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style AI fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style WD fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
 ```
 
 ---
