@@ -350,7 +350,137 @@ Claude API scales with every scan. A viral moment with 50,000 scans in a month =
 
 ---
 
+## Multi-Tenancy Architecture
 
+### Row-Level Security (RLS)
+
+Enable PostgreSQL RLS on every table in Phase 1. Enforces `user_id` isolation at the database level — a safety net beneath the application layer.
+
+```sql
+-- Template — apply to every table
+ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY user_isolation ON {table_name}
+  USING (user_id = current_setting('app.current_user_id')::uuid);
+```
+
+Set `app.current_user_id` in API middleware before every query. No query can ever return another user's rows, even if application code omits a WHERE clause.
+
+**Tables requiring RLS:** receipts, receipt_items, price_history, shopping_lists, ingestion_sources, ingestion_log, recurring_patterns, review_inbox, device_tokens, notification_log, spending_periods, saved_reports, ai_chat_sessions, ai_chat_log, user_preferences — every table without exception.
+
+### Organisation Layer
+
+```
+organisations
+  id (uuid, PK) · name · slug · plan · owner_id · created_at
+  max_members · data_region
+
+users (additions)
+  + org_id (FK → organisations, nullable)
+  + role ('owner' | 'admin' | 'member')
+  + locale · preferred_currency · data_region
+```
+
+Enables family accounts, B2B licensing, and future enterprise tiers without rebuilding the data model.
+
+### Cross-Tenant Test Suite
+
+Mandatory integration tests that block deployment on failure:
+- Create users A and B in separate orgs
+- Assert all of B's API calls return zero rows of A's data
+- Assert RLS blocks direct DB queries across user boundaries
+- Assert AI chatbot never references another user's data
+- Zero tolerance — any cross-tenant leak is a P0 incident
+
+---
+
+## Internationalisation (i18n) Architecture
+
+### Multi-Region AWS Setup
+
+```
+Route 53 (geolocation routing)
+  ├── US users     → us-east-1 (ECS + RDS + S3)
+  ├── EU users     → eu-west-1 Ireland (ECS + RDS + S3)
+  ├── India users  → ap-south-1 Mumbai (ECS + RDS + S3)
+  └── APAC users   → ap-southeast-2 Sydney (ECS + RDS + S3)
+
+Each region:
+  - Independent ECS Fargate cluster
+  - Regional RDS PostgreSQL (Multi-AZ)
+  - Regional S3 bucket (receipt images never leave the region)
+  - Regional ElastiCache Redis
+  - CloudFront distribution per region
+
+Cross-region:
+  - Global routing table maps each user_id to their home region
+  - Exchange rates table replicated to all regions daily
+```
+
+### Currency Architecture
+
+```
+receipts
+  + currency (varchar 3 — ISO 4217)
+  + amount_usd (float — converted at ingestion for analytics)
+
+exchange_rates (daily snapshot)
+  from_currency · to_currency · rate · captured_at · source
+
+Strategy:
+  Store:     original currency + amount + USD equivalent
+  Display:   original currency in receipt detail views
+  Analytics: convert to user's preferred_currency at display time
+  Source:    Open Exchange Rates API (~$12/mo)
+```
+
+### i18n Framework
+
+```
+Web (Next.js):  next-i18next + i18next
+Mobile (RN):    react-i18next
+
+Date/number formatting: Intl API (no library needed)
+  new Intl.DateTimeFormat(locale).format(date)
+  new Intl.NumberFormat(locale, {style:'currency', currency}).format(amount)
+
+Translation workflow:
+  1. English strings authored by team
+  2. DeepL API for machine translation (initial pass)
+  3. Native speaker review for key copy (onboarding, pricing, privacy)
+```
+
+### International Rollout Timeline
+
+| Phase | Markets | AWS regions | Key additions |
+|---|---|---|---|
+| Phase 1 | USA | us-east-1 | RLS, org table, i18n framework (en-US only), currency schema |
+| Phase 2 | + UK, CA, AU | us-east-1 (all) | en-GB, GBP/CAD/AUD, UK/CA/AU parsers, Stripe Tax, local pricing |
+| Phase 3 | + EU | + eu-west-1 | de/fr/es i18n, EUR, GDPR, SEPA, DPA |
+| Phase 4 | + IN, BR | + ap-south-1 | hi/pt-BR i18n, INR/BRL, UPI/PIX, DPDP/LGPD |
+| Phase 5 | + JP, SEA | + ap-southeast-2 | ja i18n, JPY, Konbini, separate AP infra |
+
+---
+
+## GDPR Compliance Checklist (Phase 3 — EU Launch)
+
+- [ ] EU AWS region provisioned (eu-west-1)
+- [ ] Data residency routing — EU users' data never leaves EU region
+- [ ] Cookie consent banner (EU users only)
+- [ ] Data processing agreement (DPA) published and available on request
+- [ ] Right to erasure pipeline — full delete within 30 days across all tables + S3
+- [ ] Data export pipeline — full user data in JSON/CSV within 72 hours of request
+- [ ] Consent log table — records when and how each user consented
+- [ ] Privacy policy updated with GDPR-specific language
+- [ ] Stripe Tax enabled for EU VAT collection and remittance
+- [ ] SEPA Direct Debit enabled in Stripe
+
+---
+
+## Security Checklist
+
+- [ ] RLS enabled on every table — verified with cross-tenant test suite
+- [ ] Cross-tenant test suite passes on every deployment (blocking)
 - [ ] All OAuth tokens encrypted at rest in Secrets Manager — never in environment variables
 - [ ] RDS in private subnet — no public internet access
 - [ ] API rate limiting on all endpoints via Redis (ElastiCache)

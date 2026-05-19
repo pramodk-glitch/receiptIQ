@@ -25,6 +25,7 @@ Unlike existing apps that cover only groceries or only business expenses, Receip
 | 3 | Instant Push Notifications for Ingestion Approval | v3.0 → v3.1 | Phase 4B | ✅ Specced |
 | 4 | Custom Date Range Spending Pattern Reports | v3.1 → v3.2 | Phase 3 | ✅ Specced |
 | 5 | AI Spending Assistant — Conversational Chatbot | v3.2 → v4.0 | Phase 3 + Phase 4 | ✅ Specced |
+| 6 | Multi-Tenancy & International Expansion | v4.0 → v5.0 | Phase 1 (foundations) → Phase 5 | ✅ Specced |
 
 *Additional requirements will be appended below as they are finalized.*
 
@@ -1510,3 +1511,338 @@ Update Pro tier description in `pricing.md`:
 | Hallucination rate | < 0.5% of responses contain unsourced numbers | Quality and trust — monitored via spot-check audit |
 | Pro conversion lift | +2% conversion vs. control | Chatbot as upgrade hook |
 | Cost per active chatbot user | < $0.50/month | Margin sustainability |
+
+---
+
+## 6. Multi-Tenancy & International Expansion
+
+### Overview
+Two related but distinct concerns: multi-tenancy (making data isolation bulletproof and adding org-level accounts for households and businesses) and internationalisation (serving users in different countries, languages, and currencies). The architectural foundations must be laid in Phase 1 even if international expansion doesn't happen until Phase 3+.
+
+**Roadmap slot:**
+- Multi-tenancy foundations → Phase 1 (architectural, cheap to do early, expensive to retrofit)
+- i18n framework → Phase 2 (add framework with English-only strings, expand later)
+- Currency support → Phase 2
+- English-speaking international markets (UK, Canada, Australia) → Phase 2
+- EU expansion → Phase 3
+- India, Brazil → Phase 4
+- Japan, Southeast Asia → Phase 5
+
+**Version bump:** v4.0 → v4.1 (multi-tenancy) · v4.1 → v5.0 (international)
+
+---
+
+### 6.1 Multi-Tenancy Model
+
+ReceiptIQ uses **shared database, shared schema** — the right model for a consumer app. All users share one PostgreSQL database, isolated by `user_id`. The risk is cross-user data leakage from application bugs. Four layers of defence eliminate this risk.
+
+#### Three multi-tenancy models — decision rationale
+
+| Model | How it works | Best for | Verdict |
+|---|---|---|---|
+| Shared DB, shared schema | All users in one DB, isolated by `user_id` | Consumer app | ✓ Use this |
+| Shared DB, separate schema | One DB, each tenant gets own Postgres schema | SMB / B2B customers | Future option for enterprise tier |
+| Separate DB per tenant | Each tenant gets own RDS instance | Enterprise, high-compliance | Too expensive at this stage |
+
+---
+
+### 6.2 Row-Level Security (RLS)
+
+Enable PostgreSQL Row-Level Security on every table. This enforces `user_id` filtering at the database level — even if application code forgets a WHERE clause, the database refuses to return another user's rows.
+
+```sql
+-- Enable RLS on receipt_items (repeat for every table)
+ALTER TABLE receipt_items ENABLE ROW LEVEL SECURITY;
+
+-- Policy: users can only see their own rows
+CREATE POLICY user_isolation ON receipt_items
+  USING (user_id = current_setting('app.current_user_id')::uuid);
+```
+
+Set `app.current_user_id` at the start of every database session from the API middleware. No query can ever cross user boundaries regardless of application bugs.
+
+**Tables requiring RLS (all of them):**
+- `receipts`, `receipt_items`, `price_history`, `shopping_lists`
+- `ingestion_sources`, `ingestion_log`
+- `recurring_patterns`, `review_inbox`
+- `device_tokens`, `notification_log`
+- `spending_periods`, `saved_reports`
+- `ai_chat_sessions`, `ai_chat_log`
+- `user_preferences`
+
+---
+
+### 6.3 Organisation Layer (B2B / Household / Enterprise)
+
+Add an `organisations` table as a parent above `users`. This enables:
+- **Family accounts** — one org, multiple members, shared analytics
+- **Business accounts** — a restaurant chain tracking supplier receipts
+- **White-label** — a retailer licensing ReceiptIQ for their customers
+- **Enterprise** — separate schema or DB per org for compliance-heavy customers
+
+#### New table: `organisations`
+```
+id (uuid, PK)
+name
+slug (unique — for subdomain routing e.g. acme.receiptiq.app)
+plan ('consumer' | 'family' | 'business' | 'enterprise')
+owner_id (FK → users)
+created_at
+max_members (int, default 1)
+data_region ('us-east-1' | 'eu-west-1' | 'ap-southeast-1')
+```
+
+#### Additive columns to `users`
+```
++ org_id (FK → organisations, nullable — null for solo consumer accounts)
++ role ('owner' | 'admin' | 'member')
++ invited_by (FK → users, nullable)
++ joined_at (nullable)
+```
+
+#### RLS update for org-scoped queries
+```sql
+-- Members of the same org can see shared data where permitted
+CREATE POLICY org_isolation ON receipts
+  USING (
+    user_id = current_setting('app.current_user_id')::uuid
+    OR (
+      org_id = current_setting('app.current_org_id')::uuid
+      AND shared = true
+    )
+  );
+```
+
+---
+
+### 6.4 Cross-Tenant Leak Prevention — Test Suite
+
+A mandatory integration test suite that runs on every deployment:
+
+```
+1. Create user A and user B in separate orgs
+2. User A uploads 5 receipts, creates shopping lists, labels periods
+3. All of User B's API calls must return zero results for User A's data
+4. Attempt direct DB queries as User B's session — RLS must block them
+5. Test chatbot: User B's AI assistant must never reference User A's data
+6. Test org sharing: User A shares a receipt → only org members see it
+```
+
+---
+
+### 6.5 Currency Support
+
+Every monetary amount currently assumes USD. This must be fixed before international launch.
+
+#### Schema changes
+```
+receipts
+  + currency (varchar 3 — ISO 4217: 'USD', 'EUR', 'GBP', 'INR', 'JPY'…)
+  + amount_usd (float — converted amount for analytics aggregation)
+
+users / user_preferences
+  + preferred_currency (varchar 3, default 'USD')
+  + locale (varchar 10 — 'en-US', 'en-GB', 'de-DE', 'hi-IN', 'ja-JP'…)
+
+exchange_rates (new table — daily snapshot)
+  id (uuid, PK)
+  from_currency (varchar 3)
+  to_currency (varchar 3)
+  rate (float)
+  captured_at (date)
+  source ('open_exchange_rates' | 'ecb')
+```
+
+#### Currency conversion strategy
+- **Store:** original currency + amount, plus USD-converted amount at time of ingestion
+- **Display:** original currency in receipt detail views
+- **Analytics:** convert to user's preferred currency at display time using stored rates
+- **Exchange rate API:** Open Exchange Rates (~$12/month) or ECB free feed (EUR base only)
+
+#### Local price points for subscriptions
+| Market | Pro | Family |
+|---|---|---|
+| USA | $4.99/mo | $7.99/mo |
+| UK | £3.99/mo | £6.49/mo |
+| EU | €4.49/mo | €6.99/mo |
+| India | ₹349/mo | ₹549/mo |
+| Australia | A$6.99/mo | A$10.99/mo |
+| Canada | C$6.49/mo | C$9.99/mo |
+
+Stripe handles local currency billing natively. Enable Stripe Tax for automatic VAT/GST collection and remittance.
+
+---
+
+### 6.6 Language & Localisation (i18n)
+
+#### Framework
+- **Web (Next.js):** `next-i18next` + `i18next`
+- **Mobile (React Native):** `i18next` + `react-i18next`
+- Extract all UI strings into JSON translation files from Phase 2 onward — even if only English exists initially
+- Use **DeepL API** for machine translation of initial strings, human review for key copy
+
+#### Priority languages by market size
+
+| Priority | Language | Markets |
+|---|---|---|
+| 1 | English (en-US, en-GB, en-AU) | USA, UK, Australia, Canada |
+| 2 | Spanish (es-ES, es-MX) | Spain, Latin America |
+| 3 | Portuguese (pt-BR) | Brazil |
+| 4 | German (de-DE) | Germany, Austria, Switzerland |
+| 5 | French (fr-FR) | France, Belgium, Canada |
+| 6 | Hindi (hi-IN) | India |
+| 7 | Japanese (ja-JP) | Japan |
+| 8 | Mandarin (zh-CN) | China (separate deployment required) |
+
+#### Formatting — use platform APIs, not manual
+```javascript
+// Dates
+new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
+// Jan 15, 2025 (en-US) · 15 Jan 2025 (en-GB) · 15.01.2025 (de-DE)
+
+// Currency
+new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount)
+// $1,247.80 (en-US) · £1,247.80 (en-GB) · 1.247,80 € (de-DE)
+```
+
+---
+
+### 6.7 Retailer & Email Parser Coverage by Market
+
+The OCR layer (Claude Vision) handles receipts in any language from day one. The email parser layer needs market-by-market additions.
+
+| Market | Key retailers to add | Complexity | Phase |
+|---|---|---|---|
+| UK | Tesco, Sainsbury's, ASDA, M&S, Amazon UK, Deliveroo | Low | Phase 2 |
+| Canada | Loblaws, Canadian Tire, Sobeys, Amazon CA | Low | Phase 2 |
+| Australia | Woolworths, Coles, JB Hi-Fi, Amazon AU | Low | Phase 2 |
+| Germany | REWE, Edeka, Lidl, DM, Amazon DE | Medium | Phase 3 |
+| France | Carrefour, Leclerc, Monoprix, Amazon FR | Medium | Phase 3 |
+| India | BigBasket, Amazon IN, Flipkart, Zepto, Blinkit, Swiggy | Medium | Phase 4 |
+| Brazil | Mercado Livre, iFood, Rappi, Amazon BR | Medium | Phase 4 |
+| Japan | Rakuten, Amazon JP, 7-Eleven, FamilyMart | High | Phase 5 |
+
+---
+
+### 6.8 Data Residency & Legal Compliance
+
+#### Requirements by region
+
+| Region | Law | Key requirements | Infrastructure impact |
+|---|---|---|---|
+| European Union | GDPR | Data residency option, right to erasure, DPA, consent management | EU AWS region (eu-west-1 or eu-central-1) |
+| UK | UK GDPR | Same as EU GDPR effectively | Can use EU region |
+| USA (California) | CCPA | Already in plan | None additional |
+| Brazil | LGPD | Data subject rights, similar to GDPR | US-East or dedicated region |
+| India | DPDP Act 2023 | Data localisation for sensitive data | AP region (ap-south-1 Mumbai) |
+| China | PIPL | Very strict — complete data localisation | Entirely separate deployment — Phase 5+ |
+| Australia | Privacy Act | Broadly similar to GDPR | AP region (ap-southeast-2 Sydney) |
+
+#### Data residency architecture
+
+```
+Users table
+  + data_region ('us-east-1' | 'eu-west-1' | 'ap-south-1' | 'ap-southeast-2')
+
+Routing layer (API Gateway / CloudFront):
+  - Detect user's region on signup
+  - Route all subsequent requests to the correct regional RDS instance
+  - Receipt images stored in region-matched S3 bucket
+```
+
+#### GDPR-specific additions (Phase 3, EU launch)
+- Cookie consent banner (EU users only)
+- Data processing agreement (DPA) available on request
+- Right to erasure: full delete pipeline that removes user data from all tables, S3, and backups within 30 days
+- Data export: full user data export in JSON/CSV within 72 hours of request
+- Consent log: record when and how each user gave consent
+
+---
+
+### 6.9 International Payment Processing
+
+Stripe is already in the tech stack. Configure for international:
+
+- **Stripe Tax** — enable from day one. Automatically calculates, collects, and remits VAT/GST in 50+ countries. No manual tax handling needed.
+- **Local payment methods** per region:
+
+| Region | Payment methods to enable |
+|---|---|
+| EU | SEPA Direct Debit, iDEAL (NL), Bancontact (BE), Klarna |
+| UK | Bacs Direct Debit, Klarna |
+| India | UPI, Razorpay (better than Stripe IN for local methods) |
+| Brazil | PIX, Boleto |
+| Australia | BECS Direct Debit |
+| Japan | Konbini (convenience store payment) |
+
+---
+
+### 6.10 Internationalisation Rollout — Phased Plan
+
+| Phase | Markets | Key deliverables |
+|---|---|---|
+| Phase 1 (Q1 2025) | USA only | RLS, org table foundation, i18n framework with English strings, currency field on schema |
+| Phase 2 (Q2–Q3 2025) | + UK, Canada, Australia | UK/CA/AU retailer parsers, GBP/CAD/AUD currency, local price points, Stripe Tax |
+| Phase 3 (Q4 2025) | + EU (DE, FR, ES) | German/French/Spanish i18n, EUR, EU AWS region, GDPR compliance, SEPA payments |
+| Phase 4 (2026) | + India, Brazil | Hindi/Portuguese i18n, INR/BRL, local parsers, UPI/PIX payments, DPDP/LGPD |
+| Phase 5 (2026+) | + Japan, Southeast Asia | Japanese i18n, JPY, Konbini payments, separate AP deployment |
+
+---
+
+### 6.11 Schema Summary — All New / Changed Tables
+
+#### New tables
+```
+organisations — org-level accounts for family, business, enterprise
+exchange_rates — daily currency rate snapshots
+```
+
+#### Additive columns
+```
+users
+  + org_id (FK → organisations, nullable)
+  + role ('owner' | 'admin' | 'member')
+  + invited_by (FK → users, nullable)
+  + joined_at (nullable)
+  + locale (varchar 10)
+  + preferred_currency (varchar 3, default 'USD')
+  + data_region (varchar 20)
+
+receipts
+  + currency (varchar 3)
+  + amount_usd (float — converted for analytics)
+  + org_id (FK → organisations, nullable — for shared org receipts)
+  + shared (boolean, default false — visible to org members)
+```
+
+---
+
+### 6.12 Infrastructure Section Changes
+
+Add to `infrastructure.md`:
+- Multi-region AWS architecture diagram
+- RLS implementation notes
+- GDPR compliance checklist additions
+- International payment processing setup
+- Data residency routing layer
+
+---
+
+### 6.13 Success Metrics
+
+**Multi-tenancy**
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Cross-tenant leak incidents | 0 | Non-negotiable — any leak is a critical incident |
+| RLS coverage | 100% of tables | No exceptions |
+| Cross-tenant test suite pass rate | 100% on every deploy | Automated, blocking |
+
+**Internationalisation**
+
+| Metric | Target | Rationale |
+|---|---|---|
+| UK / CA / AU users within 6mo of Phase 2 | > 10% of total users | Validates English-market expansion |
+| EU users within 6mo of Phase 3 | > 8% of total users | GDPR investment justified |
+| Non-USD receipt ingestion accuracy | > 92% | Validates currency + parser coverage |
+| Local payment method adoption | > 40% in each non-US market | Reduces payment friction |

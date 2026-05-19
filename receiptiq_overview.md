@@ -5,6 +5,7 @@
 - Ask anything about your spending in plain English — "How much did the Italy trip cost?", "Which subscriptions haven't I used in 3 months?" — and get instant, accurate answers
 - Works across groceries, dining, utilities, subscriptions, travel, medicine, and more — not just one category
 - Available on iOS, Android, and web with full feature parity
+- Built for global use — supports multiple currencies, languages, and local retailers across US, UK, Canada, Australia, EU, India, and more
 
 ---
 
