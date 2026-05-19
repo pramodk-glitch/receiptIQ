@@ -26,6 +26,7 @@ Unlike existing apps that cover only groceries or only business expenses, Receip
 | 4 | Custom Date Range Spending Pattern Reports | v3.1 → v3.2 | Phase 3 | ✅ Specced |
 | 5 | AI Spending Assistant — Conversational Chatbot | v3.2 → v4.0 | Phase 3 + Phase 4 | ✅ Specced |
 | 6 | Multi-Tenancy & International Expansion | v4.0 → v5.0 | Phase 1 (foundations) → Phase 5 | ✅ Specced |
+| 7 | Historical Data Ingestion | v5.0 → v5.1 | Phase 3 → Phase 5 | ✅ Specced |
 
 *Additional requirements will be appended below as they are finalized.*
 
@@ -1846,3 +1847,323 @@ Add to `infrastructure.md`:
 | EU users within 6mo of Phase 3 | > 8% of total users | GDPR investment justified |
 | Non-USD receipt ingestion accuracy | > 92% | Validates currency + parser coverage |
 | Local payment method adoption | > 40% in each non-US market | Reduces payment friction |
+
+---
+
+## 7. Historical Data Ingestion
+
+### Overview
+Give users a way to backfill months or years of purchase history before they started using ReceiptIQ. Without historical data, price trends are thin, inflation comparisons are shallow, and analytics lack context for the first 3–6 months. Eight ingestion methods cover all major sources — from Amazon's official data export to bulk camera roll scanning.
+
+**Roadmap slot:** Phase 3 (bulk scan + Amazon export) · Phase 4B (browser extension portal + email attachments) · Phase 4C (cloud storage + Plaid bank import)
+**New UI:** "Import history" onboarding flow — shown to new users on first login
+**Version bump:** v5.0 → v5.1
+
+---
+
+### 7.1 Method Overview — Priority Order
+
+| Priority | Method | Effort | Coverage | ToS risk | Phase |
+|---|---|---|---|---|---|
+| 1 | Amazon order history CSV import | Low | All Amazon orders, years back | None | 3 |
+| 2 | Bulk camera roll / drag-drop upload | Medium | Any paper receipt ever | None | 3 |
+| 3 | Email attachment scan (PDF receipts) | Medium | Any retailer emailing PDF receipts | None | 4B |
+| 4 | Browser extension — retailer portals | Medium | Costco, Walmart, Target order history | Low | 4B |
+| 5 | Google Drive / Dropbox scan | Medium | Whatever user has saved | None | 4C |
+| 6 | Bank / credit card import (Plaid) | High | All card transactions — no line items | None | 4C |
+| 7 | CCPA data requests (Walmart, Target…) | High | Broad but slow, messy formats | None | 5 |
+| 8 | Retailer OAuth (when available) | Very high | Best quality, future-proof | None | 5 |
+
+---
+
+### 7.2 Amazon Order History CSV Import
+
+Amazon's "Request My Data" feature (GDPR/CCPA data portability) exports a ZIP file containing CSVs of every order ever placed — items, prices, dates, ASINs, going back years. The format is stable, well-documented, and completely legal to parse.
+
+#### User flow
+1. User goes to Amazon → Account → Request My Data → Order History
+2. Amazon emails a ZIP file within 2–5 days
+3. User downloads ZIP and uploads it to ReceiptIQ (web drag-drop or mobile file picker)
+4. ReceiptIQ parses the CSV, maps to `receipt_items` schema, deduplicates against existing data
+5. Background job processes the full history and populates price history
+
+#### CSV fields available
+```
+Order ID · Order Date · Order Total · Item Name · ASIN
+Category · Quantity · Unit Price · Shipping Address
+```
+
+#### Implementation notes
+- Parse `Retail.OrderHistory.1.csv` (primary file in the export ZIP)
+- Map ASIN → item_name_normalized via Amazon product lookup (or Claude extraction)
+- Deduplicate: hash(ASIN + order_date + quantity) — prevents double-import if user re-uploads
+- Mark all items with `source: 'amazon_csv_export'` and `auto_ingested: true`
+- Show a progress bar during import — large histories can have 1,000+ orders
+
+---
+
+### 7.3 Bulk Camera Roll / Drag-Drop Upload
+
+Most people have years of receipt photos sitting in their camera roll. On mobile, allow multi-select of photos. On web, allow drag-drop of up to 50 images at once. Each image goes through the standard Claude Vision OCR pipeline, queued as background jobs.
+
+#### Mobile flow
+- "Import from Photos" button in the History Import screen
+- System photo picker opens — user selects multiple images (no limit but warn above 100)
+- Images queued to SQS for background processing
+- Progress indicator: "Processing 47 of 132 receipts…"
+- Completed receipts appear in the history view as they finish
+
+#### Web flow
+- Drag-and-drop zone accepting JPEG, PNG, HEIC, PDF
+- Batch of up to 50 files per upload session
+- Same background queue as mobile
+
+#### Cost note
+At ~$0.016 per scan, 200 historical receipts = ~$3.20 in Claude API costs. Limit bulk import to Pro tier only. Free tier: max 30 historical scans (same as monthly scan limit).
+
+---
+
+### 7.4 Email Attachment Scan (PDF Receipts)
+
+Separate from the email body parser (which handles inline receipt emails), this scans for PDF attachments in the user's Gmail or Outlook. Many retailers attach a PDF receipt to the email rather than embedding it inline — Whole Foods, Apple, hotel chains, airlines, and most B2B suppliers do this.
+
+#### How it works
+- When Gmail/Outlook OAuth is connected, also scan for emails with PDF attachments from known retailer domains
+- Download the PDF attachment (not the email body)
+- Pass to Claude Vision for extraction (PDFs rendered as images)
+- Store same as any other auto-ingested receipt
+
+#### Separate from body parser
+- Body parser handles: inline HTML email receipts
+- Attachment scanner handles: PDF receipts attached to emails
+- Both run as part of the same OAuth connection — no additional setup from the user
+
+#### Retailers commonly using PDF attachments
+Apple, hotel chains (Marriott, Hilton, Hyatt), airlines (United, Delta, American), Whole Foods Market, most utility companies, doctors/medical offices, insurance providers
+
+---
+
+### 7.5 Browser Extension — Retailer Web Portal Import
+
+Extends the Phase 4B browser extension to pull full order history from retailer web portals when the user navigates to their account page.
+
+#### Retailer coverage and availability
+
+| Retailer | History available | Login required | Complexity |
+|---|---|---|---|
+| Costco | ✓ Purchase history in member portal | Yes — Costco account | Medium |
+| Walmart | ✓ Order history (online orders only) | Yes — Walmart.com account | Medium |
+| Target | ✓ Circle rewards purchase history | Yes — Target Circle account | Medium |
+| Best Buy | ✓ Order history | Yes — Best Buy account | Medium |
+| Kroger | Partial — loyalty card history | Yes — Kroger Plus card | High |
+| Whole Foods | ✗ Not available (Amazon account) | N/A | N/A |
+
+#### User flow
+1. User opens the retailer's website and logs in
+2. Extension detects the order history page
+3. Extension shows a banner: "Import your Costco history into ReceiptIQ?"
+4. User taps Import — extension extracts all available order data
+5. Data sent to ReceiptIQ API and queued for processing
+
+#### Important: do NOT store retailer credentials
+The extension operates within the user's existing browser session. ReceiptIQ never sees, requests, or stores the user's retailer username or password. The user logs in normally in their browser — the extension just reads the page DOM.
+
+---
+
+### 7.6 Cloud Storage Scan (Google Drive / Dropbox)
+
+Many users save receipt PDFs to Google Drive or Dropbox — especially for warranty claims, expense reports, or just general archiving. Connect once and ReceiptIQ scans for receipt-like PDFs.
+
+#### How it works
+- User connects Google Drive or Dropbox via OAuth
+- ReceiptIQ scans for PDFs with filenames matching receipt patterns (e.g. "receipt", "invoice", "order", merchant names)
+- Also scans the "Receipts" folder if one exists
+- Presents a review screen: "Found 43 possible receipts — tap to confirm which to import"
+- User reviews thumbnails and confirms — avoids importing non-receipt PDFs
+
+#### Privacy note
+ReceiptIQ requests read-only access to Drive/Dropbox. Only files matching receipt patterns are downloaded and processed — not the full Drive contents. Raw file content discarded after parsing (same policy as email HTML).
+
+---
+
+### 7.7 Bank / Credit Card Import (Plaid)
+
+Connects to the user's bank or credit card via Plaid to pull transaction history going back 12–24 months. Does not provide line items — only merchant name, date, and total. Fills in the spend picture for transactions where no receipt exists.
+
+#### What Plaid provides
+```
+Merchant name (normalised) · Transaction date · Amount
+Category (Plaid's own categorisation) · Account type
+```
+
+#### What ReceiptIQ does with it
+- Creates a "Plaid transaction" receipt record with total and merchant only
+- Flags as `source: 'plaid'`, `has_line_items: false`
+- Shows in analytics as a merchant total (not item-level)
+- Used for: total spend per merchant, store visit frequency, category totals
+- NOT used for: price history (no line items), vendor comparison
+
+#### Cost
+Plaid Transactions product: ~$0.30/user/month. Pro tier only. Include in per-user cost model.
+
+#### Supported institutions
+Plaid covers 12,000+ US financial institutions including all major banks (Chase, BofA, Wells Fargo, Citi, Amex, Capital One) and most credit unions.
+
+---
+
+### 7.8 CCPA / GDPR Data Requests
+
+Under CCPA (US) and GDPR (EU), users have the right to request all data a company holds about them. Most major retailers must respond within 45 days (CCPA) or 30 days (GDPR) with a structured data export.
+
+#### Process
+1. ReceiptIQ provides guided instructions per retailer: "Here's how to request your data from Walmart"
+2. User submits the request on the retailer's website
+3. Retailer emails the export (typically a ZIP with JSON or CSV files)
+4. User uploads the export to ReceiptIQ
+5. ReceiptIQ parses the retailer-specific format
+
+#### Retailer formats (where known)
+
+| Retailer | Export format | Fields available |
+|---|---|---|
+| Walmart | JSON | Orders, items, prices, store location |
+| Target | CSV | Orders, items, Circle rewards |
+| Best Buy | CSV | Orders, items, SKUs |
+| Kroger | CSV | Loyalty purchase history |
+
+#### Caveat
+This is the slowest method (45-day wait) and the export formats are inconsistent and change without notice. Treat as a last resort for users who want deep history and are willing to wait. Build the parser for Walmart and Target first as they have the largest user bases.
+
+---
+
+### 7.9 Retailer OAuth (Future / Phase 5)
+
+The gold standard — user authorises ReceiptIQ to pull their purchase data via the retailer's official API. No scraping, no credential storage, no ToS concerns.
+
+**Current reality:** Almost no major US retailers offer OAuth for third-party order history access as of 2025. This is expected to change as data portability regulations strengthen (EU Digital Markets Act, proposed US data portability legislation).
+
+**Watch list:**
+- Amazon Selling Partner API (currently B2B only)
+- Kroger API (exists but limited scope)
+- Albertsons / Safeway (piloting retailer data programs)
+- Open Banking analogues for retail (emerging in EU)
+
+**Action:** Monitor quarterly. Build the OAuth integration framework in Phase 4 (already needed for Gmail/Outlook) so adding retailer OAuth is a configuration change, not a rebuild.
+
+---
+
+### 7.10 Onboarding — "Import Your History" Flow
+
+Show this flow to every new user on first login, before the main dashboard. Make it feel like a setup wizard, not an optional feature.
+
+```
+Welcome to ReceiptIQ!
+
+Let's start with what you already have:
+
+[ ] Amazon order history          — Import years of orders instantly
+[ ] Photos of old receipts        — Scan your camera roll in bulk
+[ ] Receipt PDFs (Drive/Dropbox)  — Connect your cloud storage
+[ ] Bank / credit card            — Link your card for transaction history
+[ ] Other retailers (Costco, Walmart…) — Browser extension guide
+
+[Skip for now — start fresh]     [Import selected sources →]
+```
+
+Each option checked triggers the relevant import flow immediately. Users who complete at least one import source are significantly more likely to be retained at 30 days — the analytics are immediately interesting rather than empty.
+
+---
+
+### 7.11 New Data Schema
+
+#### Additive columns to `receipts`
+```
++ source_detail (varchar — 'amazon_csv_export' | 'camera_roll' | 'pdf_attachment' |
+                           'portal_extension' | 'google_drive' | 'dropbox' |
+                           'plaid' | 'ccpa_export' | 'retailer_oauth')
++ has_line_items (boolean, default true — false for Plaid transactions)
++ historical_import_id (FK → historical_imports, nullable)
++ import_confidence (float 0–1, nullable — OCR confidence for scanned items)
+```
+
+#### New table: `historical_imports`
+```
+id (uuid, PK)
+user_id (FK → users)
+source_type (matches source_detail values above)
+started_at
+completed_at (nullable)
+status ('queued' | 'processing' | 'completed' | 'failed')
+total_records (int)
+processed_records (int)
+failed_records (int)
+date_range_start (date — earliest record in import)
+date_range_end (date — latest record in import)
+error_log (text, nullable)
+```
+
+---
+
+### 7.12 Features Section Changes
+
+**Phase 3 — Smart Shopping:** add new feature:
+- **Bulk Historical Import** — Import years of receipt history from Amazon order exports, bulk camera roll scanning, or drag-and-drop PDF upload. Analytics and price trends are meaningful from day one.
+
+**Phase 4 — Advanced:** add new feature:
+- **Full History Backfill** — Connect Google Drive or Dropbox to scan saved receipt PDFs. Import transaction history from bank/credit cards via Plaid. Browser extension pulls Costco, Walmart, and Target order history directly from your account page.
+
+---
+
+### 7.13 Overview & Marketing Changes
+
+Add to core user journeys:
+- **📦 Import History** — Upload your Amazon order history CSV, bulk-scan your camera roll, or connect your bank card → years of data imported in minutes → analytics are interesting from day one, not month six
+
+Add to market gap:
+- "No app gives you a structured onboarding flow to import years of existing purchase history from Amazon, your camera roll, cloud storage, and bank cards in one session"
+
+---
+
+### 7.14 Roadmap Changes
+
+**Phase 3 — Smart Shopping:** add:
+- Amazon order history CSV import
+- Bulk camera roll import (mobile)
+- Batch drag-drop upload (web, up to 50 files)
+- "Import your history" onboarding flow
+
+**Phase 4B — Bills + Notifications:** add:
+- Email PDF attachment scanner (Gmail + Outlook)
+- Browser extension: Costco, Walmart, Target portal history import
+
+**Phase 4C — Extended Bills:** add:
+- Google Drive + Dropbox receipt scan
+- Bank / credit card import (Plaid)
+
+**Phase 5 — Full Life Spend:** add:
+- CCPA export parsers (Walmart, Target, Best Buy)
+- Retailer OAuth (when available)
+
+---
+
+### 7.15 Pricing Changes
+
+**Bulk historical import limits by tier:**
+
+| Tier | Bulk scan limit | Amazon CSV | Plaid | Cloud storage |
+|---|---|---|---|---|
+| Free | 30 historical scans | ✗ | ✗ | ✗ |
+| Pro | Unlimited | ✓ | ✓ ($0.30/mo added) | ✓ |
+| Family | Unlimited (per member) | ✓ | ✓ per member | ✓ |
+
+---
+
+### 7.16 Success Metrics
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Onboarding import completion | > 50% of new users complete ≥ 1 import | Validates the history import as a retention driver |
+| Amazon CSV imports | > 20% of Pro users within 30 days | Measures awareness and willingness to export |
+| Avg historical records per import | > 200 items | Validates real data depth being added |
+| 30-day retention (users who imported) | > 15% higher than non-importers | Core hypothesis — history = stickiness |
+| Bulk scan accuracy | > 90% confidence on camera roll photos | OCR quality on non-ideal real-world images |

@@ -22,7 +22,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 |---|---|---|
 | Phase 1 — Core | Auth, OCR scan, line-item storage, dashboard | 10–14 weeks |
 | Phase 2 — Intelligence | Price history, vendor comparison, inflation tracker | +8 weeks |
-| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods, AI spending assistant (chat) | +8 weeks |
+| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods, AI spending assistant (chat), Amazon CSV import, bulk camera roll scan, history onboarding flow | +8 weeks |
 | Phase 4A — Email Ingestion | Gmail + Outlook OAuth, forward-to-email, top 12 retailer parsers, duplicate detection, consent screen | +6 weeks |
 | Phase 4B — Bills + Notifications | Bills ingestion (dining, subscriptions, travel, parking), instant push notifications with Keep/Dismiss, 24hr auto-ingest, weekly digest, browser extension | +8 weeks |
 | Phase 4C — Extended Bills | Utilities, phone, rent, car services, account number redaction engine, bill due date calendar, per-source notification preferences | +6 weeks |
@@ -69,8 +69,8 @@ graph TD
         subgraph APP["Application layer"]
             API["⚙️ API server\nECS Fargate · Node.js"]
             MB["📨 Message bus\nSNS · SQS · SES"]
-            LMB["⚡ Lambda jobs\nOCR · email parse · 24hr timer"]
-            CL["🧠 Claude AI\nVision · reasoning · Text-to-SQL"]
+            LMB["⚡ Lambda jobs\nOCR · email parse · bulk import · 24hr timer"]
+            CL["🧠 Claude AI\nVision · reasoning · Text-to-SQL · bulk OCR"]
         end
 
         subgraph DATA["Data layer"]
@@ -87,11 +87,17 @@ graph TD
         AF["🔔 Apple / Firebase\nAPNs · FCM push notifications"]
     end
 
+    subgraph HIST["Historical import services (Req 7)"]
+        PL["🏦 Plaid\nBank · card transactions"]
+        GD["☁️ Google Drive / Dropbox\nReceipt PDF scan"]
+        AZ["📦 Amazon export\nCSV · CCPA data request"]
+    end
+
     W -->|HTTPS requests| API
     M -->|HTTPS requests| API
     API -->|OCR jobs| LMB
     API -->|queue jobs| MB
-    LMB -->|Vision OCR| CL
+    LMB -->|Vision OCR · bulk| CL
     MB -->|push| AF
     API -->|read/write| PG
     API -->|cache| RD
@@ -99,6 +105,9 @@ graph TD
     LMB -->|price history| TS
     API -->|billing| ST
     SG -->|parsed emails| LMB
+    PL -->|transaction history| LMB
+    GD -->|receipt PDFs| LMB
+    AZ -->|order CSVs| LMB
 ```
 
 ---
@@ -107,38 +116,50 @@ graph TD
 
 ```mermaid
 flowchart TD
-    A["📷 Camera scan"]
-    B["📧 Gmail / Outlook\nauto-ingestion"]
-    C["📨 Forward email\nreceipts@receiptiq.app"]
-    D["🧩 Browser extension\nAmazon · Costco · Walmart"]
+    subgraph RT["Real-time ingestion"]
+        A["📷 Camera scan"]
+        B["📧 Gmail / Outlook"]
+        C["📨 Forward email"]
+        D["🧩 Browser ext."]
+        A & B & C & D --> P
+        P["🧠 AI processing\nClaude Vision OCR · parse · dedup"]
+        P --> N["🔔 Push notification\nwithin 30–60 seconds"]
+        N --> K["✅ User keeps"]
+        N --> X["❌ Dismisses\n(deleted)"]
+        N --> AU["⏱ No action 24hr\nAuto-ingested"]
+        K & AU --> DB
+    end
 
-    A --> P
-    B --> P
-    C --> P
-    D --> P
+    subgraph HI["Historical import"]
+        H1["📦 Amazon CSV"]
+        H2["📸 Bulk camera roll"]
+        H3["☁️ Drive / Dropbox"]
+        H4["🏦 Plaid (bank)"]
+        H1 & H2 & H3 & H4 --> Q["⚙️ Background job queue\nSQS · batch · priority lanes"]
+        Q -->|has line items| OCR["🧠 Claude Vision batch\nOCR · parse · dedup"]
+        Q -->|Plaid — no line items| MT["🏪 Merchant total only"]
+        OCR & MT --> IR["📋 Import review\none notification on complete"]
+        IR --> HDB["🗄️ Historical data stored"]
+    end
 
-    P["🧠 AI processing\nClaude Vision OCR · parse · deduplicate · confidence score"]
+    DB["🗄️ Receipt stored in database"]
+    HDB -->|feeds same| DB
 
-    P --> N["🔔 Push notification fired\nwithin 30–60 seconds"]
+    DB --> AN["📊 Analytics"]
+    DB --> AI["🤖 AI chat"]
+    DB --> WD["📋 Weekly digest"]
 
-    N --> K["✅ User keeps\nTap ✓ in notification"]
-    N --> X["❌ User dismisses\nTap ✗ — receipt deleted"]
-    N --> AU["⏱ No action — 24 hours\nAuto-ingested (silence = keep)"]
-
-    K --> DB["🗄️ Receipt stored in database\nPostgreSQL · line items · price history updated"]
-    AU --> DB
-
-    DB --> AN["📊 Analytics\n40+ reports"]
-    DB --> AI["🤖 AI spending chat\nask anything about your data"]
-    DB --> WD["📋 Weekly digest\npatterns · captured items · insights"]
-
-    style X fill:#fee2e2,stroke:#fca5a5,color:#7f1d1d
-    style P fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
-    style N fill:#fef3c7,stroke:#fcd34d,color:#78350f
-    style DB fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
-    style AN fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
-    style AI fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
-    style WD fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style X   fill:#fee2e2,stroke:#fca5a5,color:#7f1d1d
+    style P   fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    style OCR fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    style Q   fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    style N   fill:#fef3c7,stroke:#fcd34d,color:#78350f
+    style IR  fill:#fef3c7,stroke:#fcd34d,color:#78350f
+    style DB  fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style HDB fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style AN  fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style AI  fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style WD  fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
 ```
 
 ---
@@ -184,6 +205,7 @@ All tables below are additive — no existing tables are modified destructively.
 | `saved_reports` | Requirement 4 | Cached report snapshots for fast reload and export |
 | `ai_chat_sessions` | Requirement 5 | Tracks conversation sessions per user |
 | `ai_chat_log` | Requirement 5 | Full audit trail of every chat turn — SQL generated, tokens, cost |
+| `historical_imports` | Requirement 7 | Tracks bulk import jobs — status, progress, date range, error log |
 
 ### Additive columns on existing tables
 

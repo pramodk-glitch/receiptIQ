@@ -18,6 +18,14 @@
 - If you don't act within 24 hours the receipt is auto-ingested automatically — silence means keep, and you can always remove it later
 - Every Sunday a weekly digest summarises everything captured that week with one-tap remove for anything auto-ingested
 
+## Import years of history on day one
+- Upload your Amazon order history CSV (request it from Amazon in 2 minutes — years of orders imported instantly)
+- Bulk-scan your camera roll — select hundreds of old receipt photos and AI processes them in the background
+- Connect Google Drive or Dropbox to scan saved receipt PDFs automatically
+- Link your bank or credit card via Plaid to pull 12–24 months of transaction history
+- Browser extension imports your full Costco, Walmart, and Target order history from your account page
+- Analytics and price trends are meaningful from day one, not month six
+
 ---
 
 ## What it tracks beyond retail receipts

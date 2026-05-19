@@ -62,6 +62,9 @@ The freemium model is the right fit for ReceiptIQ because:
 - Push notifications + weekly digest
 - Bills & checks ingestion
 - **AI Spending Assistant** — ask anything about your data in plain English
+- **Amazon order history CSV import** — years of history in one upload
+- **Bulk camera roll + cloud storage scan** — Google Drive, Dropbox
+- **Bank / credit card import** — Plaid transaction history (12–24 months)
 
 #### Family — $7.99/mo
 - Everything in Pro
