@@ -22,7 +22,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 |---|---|---|
 | Phase 1 — Core | Auth, OCR scan, line-item storage, dashboard | 10–14 weeks |
 | Phase 2 — Intelligence | Price history, vendor comparison, inflation tracker | +8 weeks |
-| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods | +8 weeks |
+| Phase 3 — Smart Shopping | List estimator (type or upload), budget alerts, spend forecasting, custom date range reports, labelled periods, AI spending assistant (chat) | +8 weeks |
 | Phase 4A — Email Ingestion | Gmail + Outlook OAuth, forward-to-email, top 12 retailer parsers, duplicate detection, consent screen | +6 weeks |
 | Phase 4B — Bills + Notifications | Bills ingestion (dining, subscriptions, travel, parking), instant push notifications with Keep/Dismiss, 24hr auto-ingest, weekly digest, browser extension | +8 weeks |
 | Phase 4C — Extended Bills | Utilities, phone, rent, car services, account number redaction engine, bill due date calendar, per-source notification preferences | +6 weeks |
@@ -134,6 +134,8 @@ All tables below are additive — no existing tables are modified destructively.
 | `notification_log` | Requirement 3 | Audit trail of every push sent — action taken, timing, fallback status |
 | `spending_periods` | Requirement 4 | User-named date ranges (trips, events) for custom report recall |
 | `saved_reports` | Requirement 4 | Cached report snapshots for fast reload and export |
+| `ai_chat_sessions` | Requirement 5 | Tracks conversation sessions per user |
+| `ai_chat_log` | Requirement 5 | Full audit trail of every chat turn — SQL generated, tokens, cost |
 
 ### Additive columns on existing tables
 
@@ -226,7 +228,128 @@ Before building any UI, validate these in order:
 
 ---
 
-## Security Checklist
+## Phase 1 — Infrastructure Cost Breakdown
+
+> Phase 1 scope: auth, AI receipt scanning, line-item storage, spending dashboard, mobile app skeleton, core REST API. No email ingestion, no bills, no push notifications — those are Phase 4.
+
+---
+
+### AWS Services — Monthly (Phase 1 only)
+
+| Service | Configuration | Monthly cost |
+|---|---|---|
+| ECS Fargate | Node.js API — 0.25 vCPU, 0.5GB RAM | ~$15 |
+| RDS PostgreSQL | db.t3.micro, single-AZ | ~$13 |
+| S3 | Receipt image storage (~5GB at launch) | ~$1 |
+| Lambda | OCR processing jobs — triggered per scan | ~$1 |
+| Cognito | OAuth (Google, Apple) — first 50k MAU free | $0 |
+| Route 53 | DNS for receiptiq.app | ~$1 |
+| Secrets Manager | OAuth tokens, API keys (~5 secrets) | ~$2 |
+| CloudFront | CDN for receipt images | ~$1 |
+| Certificate Manager | SSL | $0 |
+| **AWS subtotal** | | **~$34/mo** |
+
+---
+
+### Third-Party Services — Monthly
+
+| Service | Purpose | Cost |
+|---|---|---|
+| Claude API | OCR per receipt scan | Variable — see below |
+| Vercel | Next.js web frontend | $0 (free tier) |
+| Expo | React Native mobile builds + OTA | $0 (free tier) |
+| Sentry | Error monitoring | $0 (free tier) |
+| GitHub | Code hosting + Actions CI/CD | $0 (free tier) |
+| Apple Developer | App Store distribution | $99/year = ~$8/mo |
+| Google Play | Android distribution | $25 one-time |
+
+---
+
+### Claude API — The Key Variable
+
+Phase 1 is almost entirely OCR. Every receipt scan calls Claude Vision to extract line items.
+
+**Cost per scan:**
+- Input: ~2,500 tokens (image + prompt) × $3/MTok = ~$0.0075
+- Output: ~500 tokens (extracted JSON) × $15/MTok = ~$0.0075
+- **Total per scan: ~$0.015–0.02**
+
+| Monthly scans | Claude API cost |
+|---|---|
+| 500 | ~$8 |
+| 2,000 | ~$32 |
+| 5,000 | ~$80 |
+| 10,000 | ~$160 |
+
+The OCR cost is the only line item that scales directly with usage. Everything else stays flat until user volume forces infrastructure upgrades.
+
+---
+
+### Total Monthly Cost by Stage
+
+| Stage | Users | Receipts/mo | AWS | Claude API | Other | **Total** |
+|---|---|---|---|---|---|---|
+| Pre-launch / dev | 0–10 | < 200 | ~$34 | ~$3 | $8 | **~$45** |
+| Early users | 10–100 | ~500 | ~$34 | ~$8 | $8 | **~$50** |
+| Getting traction | 100–500 | ~2,000 | ~$80 | ~$32 | $28 | **~$140** |
+| Phase 1 peak | 500–1,000 | ~5,000 | ~$150 | ~$80 | $55 | **~$285** |
+
+The jump from $50 to $140 is driven by RDS scaling to t3.small, ElastiCache Redis being added, and Vercel Pro kicking in. Phase 1 stays well under $300/month even at 1,000 users.
+
+---
+
+### One-Time Setup Costs
+
+| Item | Cost |
+|---|---|
+| Domain registration (receiptiq.app) | ~$12/year |
+| Apple Developer account | $99/year |
+| Google Play Console | $25 one-time |
+| AWS account setup + Terraform | $0 |
+| **Total one-time** | **~$136** |
+
+---
+
+### Build Cost — The Bigger Number
+
+Infrastructure is cheap. Engineering time is where Phase 1 actually costs money.
+
+**If founders are building it:**
+- Main costs are AWS (~$50/mo) and Claude API
+- 10–14 weeks of founder engineering time
+
+**If hiring contractors:**
+
+| Team | Timeline | Cost |
+|---|---|---|
+| 2 engineers (web + mobile split) | 12 weeks | ~$78k |
+| 1 strong full-stack engineer | 16 weeks | ~$39k |
+| 3 engineers (recommended) | 10 weeks | ~$117k |
+
+---
+
+### The One Cost to Watch Closely
+
+Claude API scales with every scan. A viral moment with 50,000 scans in a month = ~$800 in unplanned API costs. Two mitigations to build from day one:
+
+1. **Per-user monthly scan limit** — e.g. 100 scans free, then paid tier. Protects against abuse and creates a natural monetisation lever.
+2. **Response caching** — if the same receipt image is uploaded twice (matched by file hash), return the cached extraction instead of calling Claude again. Costs almost nothing to implement, saves significantly at scale.
+
+---
+
+### Phase 1 Cost Summary
+
+| | Low end | High end |
+|---|---|---|
+| Monthly infrastructure | ~$45/mo | ~$285/mo |
+| One-time setup | ~$136 | ~$136 |
+| Engineering (contractors) | ~$39k | ~$117k |
+| Engineering (founders) | Time only | Time only |
+| **To launch (contractor)** | **~$40k** | **~$120k** |
+| **To launch (founders)** | **~$200** | **~$200** |
+
+---
+
 
 - [ ] All OAuth tokens encrypted at rest in Secrets Manager — never in environment variables
 - [ ] RDS in private subnet — no public internet access

@@ -61,6 +61,7 @@ The freemium model is the right fit for ReceiptIQ because:
 - Auto-ingestion (Gmail, Outlook, forward-to-email)
 - Push notifications + weekly digest
 - Bills & checks ingestion
+- **AI Spending Assistant** — ask anything about your data in plain English
 
 #### Family — $7.99/mo
 - Everything in Pro
@@ -176,7 +177,7 @@ The 30 scan/month free limit needs careful calibration:
 
 ## Claude API Cost Mitigation at Scale
 
-As the user base grows, Claude API costs scale with every scan. Two mitigations to implement from Phase 1:
+As the user base grows, Claude API costs scale with every scan and every chatbot turn. Mitigations to implement from Phase 1:
 
 ### 1. Response caching
 - Hash every uploaded receipt image (SHA-256)
@@ -191,7 +192,14 @@ As the user base grows, Claude API costs scale with every scan. Two mitigations 
 ### 3. Tiered model quality
 - Free tier: Claude Haiku (faster, cheaper, ~4× less expensive) — sufficient for basic line-item extraction
 - Pro tier: Claude Sonnet (higher accuracy, better for complex receipts, medical bills, handwritten items)
+- AI Spending Assistant: Claude Sonnet always — accuracy is non-negotiable for financial data
 - Estimated saving: reduces free-tier API cost by ~75%
+
+### 4. Chatbot cost control (Phase 3+)
+- AI Spending Assistant is Pro-only — free users never generate chatbot costs
+- Context injection is pre-computed server-side and cached for 15 minutes — repeated questions in a session reuse the same context without re-fetching
+- Conversation history is summarised after 10 turns rather than passing full history — keeps token counts bounded
+- Estimated chatbot cost per active Pro user: ~$0.35/month — well within the $4.99 Pro margin
 
 ---
 

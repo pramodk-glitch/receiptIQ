@@ -24,6 +24,7 @@ Unlike existing apps that cover only groceries or only business expenses, Receip
 | 2 | Bills & Checks Auto-Ingestion + Weekly Review Flow | v2.0 → v3.0 | Phase 4B, 4C, Phase 5 | ✅ Specced |
 | 3 | Instant Push Notifications for Ingestion Approval | v3.0 → v3.1 | Phase 4B | ✅ Specced |
 | 4 | Custom Date Range Spending Pattern Reports | v3.1 → v3.2 | Phase 3 | ✅ Specced |
+| 5 | AI Spending Assistant — Conversational Chatbot | v3.2 → v4.0 | Phase 3 + Phase 4 | ✅ Specced |
 
 *Additional requirements will be appended below as they are finalized.*
 
@@ -1197,3 +1198,315 @@ Add new sub-section **My Periods** to the Analytics tab:
 | Labelled periods created | > 2 per active user within 90 days | Shows stickiness of the naming feature |
 | Preset usage vs. custom | > 50% use presets | Validates preset design covers common needs |
 | Report export rate | > 10% of reports exported | Measures value for budgeting / tax use cases |
+
+---
+
+## 5. AI Spending Assistant — Conversational Chatbot
+
+### Overview
+A conversational AI assistant that lets users ask natural language questions about their own spending data and get instant, accurate answers — with charts, tables, and proactive insights. Powered by Claude with access to the user's receipt, item, price history, and bills data. Pro-tier only.
+
+**Roadmap slot:** Phase 3 (after sufficient user data exists to make answers interesting) — ships alongside custom date range reports  
+**New UI:** Chat tab added to both mobile and web  
+**Version bump:** v3.2 → v4.0  
+**Tier restriction:** Pro and Family only — not available on Free
+
+---
+
+### 5.1 What Users Can Ask
+
+Natural language questions that no fixed report covers today:
+
+**Spending patterns**
+- "How much did I spend on groceries last month?"
+- "Am I spending more on dining out than I was 6 months ago?"
+- "What was my biggest single expense this year?"
+- "How does my December spending compare to last December?"
+
+**Price intelligence**
+- "Which items in my regular shopping have gotten most expensive this year?"
+- "What's my personal inflation rate on groceries?"
+- "When was the last time I got a good deal on olive oil?"
+
+**Store & vendor**
+- "Which store do I spend the most at?"
+- "What's the one store switch that would save me the most money?"
+- "How much have I spent at Costco vs. Walmart this year?"
+
+**Bills & subscriptions**
+- "Which subscriptions haven't I used in 3 months?"
+- "How much do my fixed bills cost me annually?"
+- "Are my utility bills higher this winter than last winter?"
+
+**Goal & budget**
+- "Am I on track for my $400 grocery budget this month?"
+- "If I cut dining to $300/month, how much would I save in a year?"
+- "What category am I most consistently over budget on?"
+
+**Custom date ranges**
+- "How much did the Italy trip cost me all in?"
+- "What did I spend in the two weeks before Christmas?"
+- "Compare my spending the month I worked from home vs. the office"
+
+**Forecasting**
+- "If milk prices keep rising at this rate, what will I pay by December?"
+- "At my current pace, what will I spend this month?"
+- "Which of my bills is most likely to increase next quarter?"
+
+---
+
+### 5.2 Technical Architecture
+
+Two approaches used in combination:
+
+#### Approach 1 — Pre-computed Context Injection (80% of queries)
+For each conversation turn, a summary of the user's data is computed and injected into Claude's context window:
+
+```
+System context injected per turn:
+- Last 90 days spend by category (totals + MoM delta)
+- Top 10 merchants by spend (last 90 days)
+- Top 20 frequently purchased items with avg price + last price
+- Active subscriptions and recurring bills
+- Monthly budget targets (if set) vs. actuals
+- Price anomalies detected in last 30 days
+- Labelled periods (trip names, event names)
+```
+
+Works well for conversational, pattern-based questions. Fast — no extra DB round trip.
+
+#### Approach 2 — Text-to-SQL (20% of queries — specific numbers, edge cases)
+For questions requiring exact figures the context summary can't answer:
+
+```
+1. Claude receives user question + DB schema (tables, columns, types)
+2. Claude generates a parameterised SQL query
+3. Query executes server-side with hardcoded WHERE user_id = $current_user
+4. Results passed back to Claude
+5. Claude formats as natural language response with optional chart
+```
+
+Example:
+```
+User: "What did I spend on dining last quarter?"
+
+Claude generates SQL:
+  SELECT SUM(line_total), COUNT(*), AVG(line_total)
+  FROM receipt_items
+  WHERE user_id = $1
+  AND category = 'Dining'
+  AND created_at >= '2024-10-01'
+  AND created_at < '2025-01-01'
+
+Result → Claude responds:
+  "You spent $1,247.80 on dining last quarter across 34 visits,
+   averaging $36.70 per meal. November was your highest dining
+   month at $498 — likely the holidays."
+```
+
+#### Decision logic
+```
+User question received
+  → Is it answerable from pre-computed context? → Use Approach 1
+  → Does it need exact figures / specific items / date ranges? → Use Approach 2
+  → Does it need both? → Approach 2 first, enrich with Approach 1 context
+```
+
+---
+
+### 5.3 Proactive Insights
+
+Beyond answering questions, the assistant surfaces proactive observations at the start of each session:
+
+```
+💡 You spent $340 more than usual this month — a $189 flight and
+   3 restaurant visits above your average account for most of it.
+
+📈 Your utility bills have risen 18% over 12 months, outpacing
+   your grocery inflation of 9%.
+
+🎯 You're at $320 of your $400 grocery budget with 10 days left
+   — you're on track.
+
+⚠️ You haven't used 3 of your subscriptions in 90+ days
+   — that's $34.47/month potentially wasted.
+```
+
+These are generated once per session open, not on every message. Keeps it useful without being intrusive.
+
+---
+
+### 5.4 System Prompt Design
+
+Critical constraints enforced via system prompt — Claude must never violate these:
+
+```
+You are a personal spending assistant for ReceiptIQ. You have access
+to the user's receipt, item, and bills data.
+
+RULES:
+1. Only state numbers that appear in the query results or injected
+   context. Never estimate or guess a figure.
+2. If data is insufficient to answer, say so clearly —
+   do not approximate.
+3. Never reference any other user's data. All queries are scoped
+   to user_id = {current_user_id}.
+4. Keep responses concise — lead with the direct answer,
+   then context. No preamble.
+5. Offer a follow-up question or related insight at the end of
+   each response where relevant.
+6. If a question is outside spending/financial data, politely
+   redirect: "I can only help with questions about your
+   ReceiptIQ data."
+7. Format numbers as currency where applicable. Use the user's
+   preferred currency.
+8. Never reproduce raw SQL to the user — only the natural
+   language result.
+```
+
+---
+
+### 5.5 Privacy & Security
+
+**Critical:** the chatbot never has access to another user's data. Enforced at two layers:
+
+| Layer | Mechanism |
+|---|---|
+| Application layer | User ID injected into every context summary server-side before Claude sees it |
+| Query layer | Every Text-to-SQL result is validated — any query missing `WHERE user_id = $current_user` is rejected before execution |
+| Prompt layer | System prompt explicitly states the user_id scope — Claude will not generate queries outside it |
+| Audit layer | Every chatbot query and SQL generated is logged to `ai_chat_log` for review |
+
+**Hallucination guard:** Claude is instructed to cite the source of every number ("based on your last 90 days", "from your 3 receipts at Walmart in January"). If no data supports a claim, it must say "I don't have enough data to answer that yet."
+
+---
+
+### 5.6 Cost Per Conversation
+
+Chatbot turns are more expensive than OCR scans. Must be Pro-only.
+
+**Per turn cost estimate (Claude Sonnet):**
+- Context injection: ~3,000 tokens input
+- User question: ~50 tokens
+- Claude response: ~300 tokens output
+- Total: ~3,350 tokens → ~$0.014 per turn
+
+| Turns per conversation | Cost per conversation |
+|---|---|
+| 3 turns | ~$0.04 |
+| 10 turns | ~$0.14 |
+| 20 turns | ~$0.28 |
+
+**Monthly cost per active Pro user** (assuming 5 conversations × 5 turns = 25 turns/month):
+- ~$0.35/month per active chatbot user
+- Pro subscription is $4.99/month → chatbot adds ~7% to per-user cost
+- Acceptable margin — no additional cost controls needed at Phase 3 scale
+
+**At scale (10,000 Pro users, all using chatbot):**
+- ~$3,500/month additional Claude API cost
+- Already factored into scaling cost projections in `pricing.md` from Phase 4 onward
+
+---
+
+### 5.7 UI & UX
+
+#### Chat interface
+- Dedicated **Chat** tab in bottom navigation (mobile) and sidebar (web)
+- Persistent conversation history within a session
+- Previous conversations accessible (last 30 days)
+- Suggested starter questions shown on first open:
+  - "How much did I spend last month?"
+  - "What's my biggest recurring expense?"
+  - "Which store gives me the best value?"
+  - "Am I over budget this month?"
+
+#### Response format
+- Plain text for simple answers
+- Inline mini-charts for trend questions (renders a sparkline or bar chart in the chat bubble)
+- Tap/click any chart to expand into the full analytics view
+- "Save as report" button on any response — saves to the user's saved reports
+
+#### Suggested follow-ups
+- Every response includes 2–3 tappable follow-up suggestions
+- Example: after "You spent $1,247 on dining last quarter" → suggestions: "Break it down by restaurant", "Compare to previous quarter", "How can I reduce this?"
+
+---
+
+### 5.8 New Data Schema
+
+#### New table: `ai_chat_sessions`
+```
+id (uuid, PK)
+user_id (FK → users)
+started_at
+last_message_at
+message_count (int)
+session_summary (text, nullable — AI-generated summary for future context)
+```
+
+#### New table: `ai_chat_log`
+```
+id (uuid, PK)
+session_id (FK → ai_chat_sessions)
+user_id (FK → users)
+role ('user' | 'assistant')
+content (text)
+sql_generated (text, nullable — for Text-to-SQL turns)
+sql_result_rows (int, nullable)
+tokens_input (int)
+tokens_output (int)
+cost_usd (float)
+created_at
+```
+
+---
+
+### 5.9 Roadmap Changes
+
+**Phase 3 — Smart Shopping:** add alongside custom date range reports:
+- AI Spending Assistant (chat interface)
+- Context injection pipeline
+- Text-to-SQL pipeline (v1 — top 20 query types)
+- Proactive insights on session open
+- Suggested follow-up questions
+
+**Phase 4 — Advanced:** expand chatbot capabilities:
+- Chart rendering inline in chat
+- "Save as report" from chat
+- Full Text-to-SQL coverage (all query types)
+- Conversation history (last 30 days)
+- What-if analysis ("if I cut dining by $100/month…")
+
+---
+
+### 5.10 Features Section Changes
+
+**Phase 3 — Smart Shopping:** add new feature:
+
+- **AI Spending Assistant** — Ask anything about your spending in plain English. "How much did the Italy trip cost all in?", "Which subscriptions haven't I used in 3 months?", "What's my personal inflation rate on groceries?" Claude answers instantly using your actual data — with charts, tables, and proactive insights. Pro and Family tier only.
+
+---
+
+### 5.11 Overview & Marketing Changes
+
+Add to core user journeys:
+- **🤖 Ask Anything** — Type any question about your spending in plain English → get an instant answer with charts and context → tap any insight to open the full report
+
+Add to market gap:
+- "No app lets you ask natural language questions about your own spending data and get accurate, sourced answers"
+
+Update Pro tier description in `pricing.md`:
+- Add "AI Spending Assistant — ask anything about your data" as a Pro feature
+
+---
+
+### 5.12 Success Metrics
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Chatbot adoption | > 40% of Pro users open chat within 30 days | Feature discovery and utility |
+| Questions per session | > 4 turns average | Indicates genuine engagement, not curiosity clicks |
+| Return chat rate | > 60% of chatbot users return within 7 days | Validates ongoing utility |
+| Hallucination rate | < 0.5% of responses contain unsourced numbers | Quality and trust — monitored via spot-check audit |
+| Pro conversion lift | +2% conversion vs. control | Chatbot as upgrade hook |
+| Cost per active chatbot user | < $0.50/month | Margin sustainability |

@@ -2,6 +2,7 @@
 
 ## What it is
 - An AI-powered app that captures every receipt, bill, and check you receive and turns them into real spending intelligence
+- Ask anything about your spending in plain English — "How much did the Italy trip cost?", "Which subscriptions haven't I used in 3 months?" — and get instant, accurate answers
 - Works across groceries, dining, utilities, subscriptions, travel, medicine, and more — not just one category
 - Available on iOS, Android, and web with full feature parity
 
@@ -45,7 +46,16 @@
 
 ---
 
-## Analytics — 40+ reports including
+## AI Spending Assistant
+- Ask anything about your spending in plain English — no need to dig through reports
+- "How much did the Italy trip cost all in?", "Which subscriptions haven't I used in 3 months?", "What's my personal inflation rate on groceries?"
+- Claude answers using your actual data — every number is sourced, never guessed
+- Proactive insights surface at the start of each session — unusual spend, budget pace, subscription waste
+- Suggests follow-up questions to help you dig deeper
+- Inline charts render directly in the chat for trend questions
+- Pro and Family tier only
+
+---
 - Monthly and annual spend by category
 - Dining out vs. groceries split over time
 - Subscription audit — every active subscription, true annual cost
