@@ -36,6 +36,24 @@
 • Auto-captures utility bills, subscriptions, restaurant checks, travel
 • Weekly digest — tap Keep or Dismiss per item
 
+📈 *Item Watchlist (optional — user preference):*
+• Home screen shows your top 10 most purchased items like iPhone Stocks
+• Each row: item name · last price paid · store · trend arrow + % change
+• Search your full purchase history to pin any item to your watchlist
+• Tap any item → price history chart, vendor comparison, personal inflation %, last purchase
+• Drag to reorder watchlist, remove items anytime
+
+📺 *Live Home Screen Ticker (optional — user preference):*
+• Scrolling strip showing upcoming bills, weekly category spend, price alerts
+• Gives the home screen a live dashboard feel at a glance
+• Choose what to show: bills due / weekly categories / price alerts
+
+⚙️ *Home Screen Preferences:*
+• Users choose which widgets appear on their home screen
+• Toggle on/off: Item Watchlist, Live Ticker, Quick Stats, AI Insights
+• Drag to reorder sections
+• Keeps default experience clean; power users get full density
+
 👨‍👩‍👧 *Advanced:*
 • Household/family shared mode
 • Barcode scanner, subscription & loyalty tracking

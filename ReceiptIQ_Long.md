@@ -86,6 +86,52 @@
 
 ---
 
+📈 *ITEM WATCHLIST (user preference — opt-in):*
+• Home screen lists top 10 most purchased items, styled like iPhone Stocks app
+• Each row shows: item name · last price paid · store · trend arrow · % change vs. prior purchase
+• Green/red indicator vs. your personal historical average for that item
+• Search full purchase history to find and pin any item to watchlist
+• Tap any item → full detail screen:
+  - Price history chart (all purchases over time)
+  - Vendor comparison (cheapest store today)
+  - Personal inflation % vs. 3mo / 6mo / 1yr ago
+  - Last purchased: date, store, price
+  - How often you buy it (purchase frequency)
+• Drag to reorder watchlist
+• Pin up to 20 items; auto-suggested based on purchase frequency
+• Available on both mobile and web portal
+
+---
+
+📺 *LIVE HOME SCREEN TICKER (user preference — opt-in):*
+• Scrolling marquee strip on home screen showing real-time spend context
+• User chooses what to display (any combination):
+  - Upcoming bills due in the next 7 days
+  - Weekly spend so far per category (Groceries $84 · Dining $32 · Medicine $18)
+  - Price alerts (Milk up 12% vs. last month at Walmart)
+  - Budget status (Groceries: 68% of monthly budget used)
+• Tap any ticker item → jumps directly to that detail screen
+• Scroll speed and number of items configurable in preferences
+• Can be paused or dismissed for the session
+
+---
+
+⚙️ *HOME SCREEN PREFERENCES (user-controlled):*
+• Users fully control what appears on their home screen
+• Toggle on/off independently:
+  - Item Watchlist (Stocks-style item tracker)
+  - Live Ticker (scrolling spend strip)
+  - Quick Stats bar (total this month, top category, biggest receipt)
+  - AI Insights card (proactive tips from spending patterns)
+  - Upcoming Bills card
+  - Recent Receipts list
+• Drag to reorder all sections
+• Separate preference profiles for mobile and web
+• Default: clean minimal view (Quick Stats + Recent Receipts only)
+• Power mode: all widgets enabled for maximum density
+
+---
+
 🆚 *COMPETITORS (8 analyzed):*
 • Groceries Tracker — grocery only
 • Expensify — business-focused, no item-level tracking
@@ -109,11 +155,12 @@
 
 ---
 
-🗄️ *DATA MODEL (13 tables):*
+🗄️ *DATA MODEL (14 tables):*
 • users, receipts, receipt_items, price_history, shopping_lists
 • ingestion_sources, ingestion_log, recurring_patterns, review_inbox
 • device_tokens, notification_log, spending_periods, saved_reports
 • ai_chat_sessions, ai_chat_log
+• user_home_preferences (watchlist items, widget toggles, section order)
 
 ---
 
@@ -132,6 +179,7 @@
 • Q3 2025 — Shopping list AI, budget alerts, barcode scanner, AI assistant
 • Q4 2025 — Auto-ingestion (Gmail/Outlook), bills ingestion, push notifications
 • Q1 2026 — Inbox backfill, 20+ retailer parsers, browser extension, medical bills, retailer API BD
+• Q2 2026 — Item Watchlist, Live Ticker, Home Screen Preferences, power user personalisation
 
 ---
 
@@ -145,3 +193,5 @@
 • 92%+ parser confidence score
 • 70%+ push notification opt-in rate
 • 60%+ instant action rate on notifications
+• 50%+ of users enabling at least one home screen widget
+• 30%+ of users pinning 5+ items to their watchlist
