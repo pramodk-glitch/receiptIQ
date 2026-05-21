@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReceiptIQ – Skin Comparison</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #f1f5f9; padding: 40px 20px 60px; min-width: 960px; }
+    @keyframes ticker { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+    .phones-row { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }
+    .phone-col { display: flex; flex-direction: column; align-items: center; gap: 14px; flex-shrink: 0; }
+    .phone-frame { width: 288px; height: 596px; border-radius: 36px; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<div style="text-align:center;margin-bottom:36px">
+  <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:14px">
+    <span style="font-size:28px">🧾</span>
+    <span style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#0f172a">ReceiptIQ</span>
+  </div>
+  <h1 style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;margin-bottom:8px">Skin Comparison</h1>
+  <p style="font-size:14px;color:#64748b">Three design directions — same app, same data, different personality</p>
+</div>
+
+<div class="phones-row">
+
+  <!-- SKIN 1: Light & Clean Fintech -->
+  <div class="phone-col">
+    <div style="text-align:center">
+      <div style="font-size:14px;font-weight:600;color:#0f172a">💼 Light &amp; Clean Fintech</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">Revolut · N26 inspired</div>
+    </div>
+    <div id="phone-light" class="phone-frame" style="border:2px solid #e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,0.10)"></div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;width:288px">
+      <div style="font-size:11px;color:#64748b;line-height:1.6">Airy white surface, indigo accents, subtle card shadows. Clean and trustworthy. Minimal borders.</div>
+    </div>
+  </div>
+
+  <!-- SKIN 2: Vibrant & Colourful -->
+  <div class="phone-col">
+    <div style="text-align:center">
+      <div style="font-size:14px;font-weight:600;color:#0f172a">🎨 Vibrant &amp; Colourful</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">Cash App · Monzo inspired</div>
+    </div>
+    <div id="phone-vibrant" class="phone-frame" style="border:2px solid #1a1a1a;box-shadow:0 20px 60px rgba(0,0,0,0.40)"></div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;width:288px">
+      <div style="font-size:11px;color:#64748b;line-height:1.6">Near-black canvas, bold orange-to-pink accent, vivid category colours. Energetic and expressive.</div>
+    </div>
+  </div>
+
+  <!-- SKIN 3: Deep Navy / Teal -->
+  <div class="phone-col">
+    <div style="text-align:center">
+      <div style="font-size:14px;font-weight:600;color:#0f172a">🌊 Deep Navy / Teal</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">Bloomberg · Premium Fintech</div>
+    </div>
+    <div id="phone-navy" class="phone-frame" style="border:2px solid #0f2840;box-shadow:0 20px 60px rgba(0,20,50,0.45)"></div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;width:288px">
+      <div style="font-size:11px;color:#64748b;line-height:1.6">Deep navy base, teal accents, warm text. Sophisticated and premium. Think Bloomberg terminal, refined.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const WATCHLIST = [
+  { name:"Whole Milk",    store:"Walmart",     price:4.28, prev:3.89, history:[3.49,3.65,3.89,4.10,4.28] },
+  { name:"Large Eggs",    store:"Costco",      price:3.99, prev:4.49, history:[4.89,4.65,4.49,4.20,3.99] },
+  { name:"Wheat Bread",   store:"Target",      price:3.49, prev:3.49, history:[3.29,3.49,3.49,3.49,3.49] },
+  { name:"Olive Oil",     store:"Whole Foods", price:11.99,prev:9.99, history:[8.99,9.49,9.99,10.99,11.99] },
+  { name:"Tylenol 500mg", store:"CVS",         price:8.49, prev:7.99, history:[7.49,7.49,7.99,8.49,8.49] },
+  { name:"Ground Coffee", store:"Amazon",      price:12.99,prev:14.99,history:[14.99,14.99,13.99,13.49,12.99] },
+];
+
+const TICKER = "🧾 Electricity due in 3 days · $142  •  🛒 Groceries $127 this week  •  ⚠️ Milk up 14% at Walmart  •  💳 Dining 72% of budget  •  💡 Switch to Aldi for eggs · save $0.80  •  ";
+
+const THEMES = {
+  light: {
+    // phone
+    phoneBg:"#ffffff", statusText:"#0f172a",
+    // ticker
+    tickerBg:"#eef2ff", tickerBorder:"#e0e7ff", tickerText:"#4f46e5",
+    // header
+    greetSub:"#6366f1", greetName:"#0f172a", avatarBg:"#6366f1", avatarText:"#ffffff",
+    // stats card
+    cardBg:"#f8fafc", cardBorder:"1px solid #f1f5f9", cardShadow:"0 1px 4px rgba(0,0,0,0.05)",
+    monthText:"#64748b", badgeBg:"#fef2f2", badgeColor:"#ef4444",
+    amountText:"#0f172a", centsText:"#94a3b8",
+    catItemBg:"#ffffff", catItemBorder:"1px solid #f1f5f9",
+    catColors:["#6366f1","#f59e0b","#ec4899"],
+    // section
+    sectionTitle:"#0f172a", editColor:"#6366f1",
+    // watchlist
+    listBg:"#ffffff", listBorder:"1px solid #f1f5f9", listShadow:"0 1px 4px rgba(0,0,0,0.05)",
+    rowDivider:"#f8fafc",
+    itemName:"#0f172a", itemSub:"#94a3b8", itemPrice:"#0f172a",
+    upColor:"#059669", downColor:"#dc2626", flatColor:"#94a3b8",
+    sparkUp:"#059669", sparkDown:"#dc2626",
+    // tabs
+    tabsBg:"#ffffff", tabsBorder:"#f1f5f9",
+    activeTabColor:"#6366f1", inactiveTabColor:"#94a3b8",
+  },
+  vibrant: {
+    phoneBg:"#0a0a0a", statusText:"#ffffff",
+    tickerBg:"#180800", tickerBorder:"#2a1200", tickerText:"#f97316",
+    greetSub:"#f97316", greetName:"#ffffff", avatarBg:"linear-gradient(135deg,#f97316,#ec4899)", avatarText:"#ffffff",
+    cardBg:"#141414", cardBorder:"1px solid #222222", cardShadow:"none",
+    monthText:"#555555", badgeBg:"#200a00", badgeColor:"#f97316",
+    amountText:"#ffffff", centsText:"#444444",
+    catItemBg:"#1a1a1a", catItemBorder:"1px solid #222222",
+    catColors:["#f97316","#a855f7","#ec4899"],
+    sectionTitle:"#ffffff", editColor:"#f97316",
+    listBg:"#141414", listBorder:"1px solid #222222", listShadow:"none",
+    rowDivider:"#1e1e1e",
+    itemName:"#ffffff", itemSub:"#555555", itemPrice:"#ffffff",
+    upColor:"#22c55e", downColor:"#f97316", flatColor:"#555555",
+    sparkUp:"#22c55e", sparkDown:"#f97316",
+    tabsBg:"#0a0a0a", tabsBorder:"#1a1a1a",
+    activeTabColor:"#f97316", inactiveTabColor:"#444444",
+  },
+  navy: {
+    phoneBg:"#071929", statusText:"#ffffff",
+    tickerBg:"#031420", tickerBorder:"#0a2a3a", tickerText:"#2dd4bf",
+    greetSub:"#2dd4bf", greetName:"#e0f2f8", avatarBg:"#0d9488", avatarText:"#ffffff",
+    cardBg:"#0c2236", cardBorder:"1px solid #163350", cardShadow:"none",
+    monthText:"#4a7a98", badgeBg:"#2a0a14", badgeColor:"#fb7185",
+    amountText:"#e0f2f8", centsText:"#2a5a78",
+    catItemBg:"#071929", catItemBorder:"1px solid #0f2840",
+    catColors:["#2dd4bf","#f59e0b","#a78bfa"],
+    sectionTitle:"#d0ecf4", editColor:"#2dd4bf",
+    listBg:"#0c2236", listBorder:"1px solid #163350", listShadow:"none",
+    rowDivider:"#0f2840",
+    itemName:"#c8e8f4", itemSub:"#2a5a78", itemPrice:"#e0f2f8",
+    upColor:"#2dd4bf", downColor:"#fb7185", flatColor:"#2a5a78",
+    sparkUp:"#2dd4bf", sparkDown:"#fb7185",
+    tabsBg:"#041420", tabsBorder:"#0a2030",
+    activeTabColor:"#2dd4bf", inactiveTabColor:"#1a4060",
+  }
+};
+
+function spark(data, color) {
+  const w=50,h=24,min=Math.min(...data),max=Math.max(...data),range=max-min||1;
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v-min)/range)*(h-4)+2}`).join(" ");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function buildPhone(t) {
+
+  const rows = WATCHLIST.map((item,i) => {
+    const up=item.price>item.prev, flat=item.price===item.prev;
+    const pct=Math.abs(((item.price-item.prev)/item.prev)*100).toFixed(1);
+    const color=flat?t.flatColor:up?t.upColor:t.downColor;
+    const arrow=flat?"—":up?`▲${pct}%`:`▼${pct}%`;
+    return `<div style="display:flex;align-items:center;padding:10px 14px;${i<WATCHLIST.length-1?`border-bottom:1px solid ${t.rowDivider}`:""};gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:${t.itemName};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+        <div style="font-size:10px;color:${t.itemSub};margin-top:1px">${item.store}</div>
+      </div>
+      ${spark(item.history, up?t.sparkUp:t.sparkDown)}
+      <div style="text-align:right;min-width:52px">
+        <div style="font-size:13px;font-weight:600;color:${t.itemPrice}">$${item.price.toFixed(2)}</div>
+        <div style="font-size:10px;font-weight:600;color:${color}">${arrow}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const catRow = [["Groceries","$412"],["Dining","$187"],["Health","$98"]].map(([l,v],i)=>
+    `<div style="flex:1;background:${t.catItemBg};border-radius:7px;padding:6px 8px;border:${t.catItemBorder}">
+      <div style="font-size:8px;color:${t.monthText};margin-bottom:2px">${l}</div>
+      <div style="font-size:12px;font-weight:600;color:${t.catColors[i]}">${v}</div>
+    </div>`
+  ).join("");
+
+  const tabs=[["🏠","Home",true],["🔍","Search",false],["🛒","Shop",false],["📊","Reports",false],["⚙️","Settings",false]];
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 18px 5px;background:${t.phoneBg};flex-shrink:0">
+      <span style="font-size:11px;color:${t.statusText};font-weight:600">9:41</span>
+      <div style="width:60px;height:14px;background:${t.phoneBg};border-radius:10px;border:1.5px solid ${t.cardBorder.replace('1px solid ','')}"></div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <svg width="12" height="9" viewBox="0 0 12 9"><rect x="0" y="5" width="2" height="4" rx="0.5" fill="${t.statusText}" opacity="0.35"/><rect x="3" y="3" width="2" height="6" rx="0.5" fill="${t.statusText}" opacity="0.55"/><rect x="6" y="1" width="2" height="8" rx="0.5" fill="${t.statusText}" opacity="0.8"/><rect x="9" y="0" width="2" height="9" rx="0.5" fill="${t.statusText}"/></svg>
+        <svg width="17" height="9" viewBox="0 0 20 11"><rect x="0" y="1.5" width="17" height="8" rx="1.5" fill="none" stroke="${t.statusText}" stroke-width="1" opacity="0.8"/><rect x="17.5" y="3.5" width="2" height="4" rx="1" fill="${t.statusText}" opacity="0.5"/><rect x="1" y="2.5" width="12" height="6" rx="1" fill="${t.activeTabColor}"/></svg>
+      </div>
+    </div>
+
+    <div style="background:${t.tickerBg};border-bottom:1px solid ${t.tickerBorder};overflow:hidden;padding:4px 0;flex-shrink:0">
+      <div style="display:flex;white-space:nowrap;animation:ticker 20s linear infinite">
+        <span style="font-size:10px;color:${t.tickerText};padding-right:20px">${TICKER}${TICKER}</span>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;background:${t.phoneBg}">
+      <div style="padding:11px 13px 7px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:9px;color:${t.greetSub};font-weight:600;letter-spacing:0.08em">GOOD MORNING</div>
+          <div style="font-size:16px;font-weight:600;color:${t.greetName};margin-top:1px">Pramod 👋</div>
+        </div>
+        <div style="width:31px;height:31px;border-radius:16px;background:${t.avatarBg};display:flex;align-items:center;justify-content:center;font-size:13px;color:${t.avatarText};font-weight:600">P</div>
+      </div>
+
+      <div style="margin:0 12px 0;background:${t.cardBg};border-radius:12px;padding:11px 13px;border:${t.cardBorder};${t.cardShadow?'box-shadow:'+t.cardShadow:''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:9px;color:${t.monthText};font-weight:600;letter-spacing:0.06em">MAY 2026</span>
+          <span style="font-size:9px;color:${t.badgeColor};background:${t.badgeBg};padding:2px 7px;border-radius:8px;font-weight:600">↑8% vs Apr</span>
+        </div>
+        <div style="font-size:24px;font-weight:700;color:${t.amountText};letter-spacing:-1px">$1,247<span style="font-size:11px;color:${t.centsText};font-weight:400">.83</span></div>
+        <div style="display:flex;gap:6px;margin-top:7px">${catRow}</div>
+      </div>
+
+      <div style="margin:9px 12px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:600;color:${t.sectionTitle}">My Items</span>
+          <span style="font-size:10px;color:${t.editColor};cursor:pointer">Edit</span>
+        </div>
+        <div style="background:${t.listBg};border-radius:12px;border:${t.listBorder};${t.listShadow?'box-shadow:'+t.listShadow:''}overflow:hidden">${rows}</div>
+      </div>
+
+      <div style="height:10px"></div>
+    </div>
+
+    <div style="display:flex;background:${t.tabsBg};border-top:1px solid ${t.tabsBorder};padding:5px 0 10px;flex-shrink:0">
+      ${tabs.map(([icon,label,active])=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;padding:3px 0">
+        <span style="font-size:16px">${icon}</span>
+        <span style="font-size:8px;color:${active?t.activeTabColor:t.inactiveTabColor};font-weight:${active?600:400}">${label}</span>
+        ${active?`<div style="width:12px;height:2px;background:${t.activeTabColor};border-radius:1px;margin-top:1px"></div>`:""}
+      </div>`).join("")}
+    </div>
+  `;
+}
+
+document.getElementById("phone-light").innerHTML   = buildPhone(THEMES.light);
+document.getElementById("phone-vibrant").innerHTML = buildPhone(THEMES.vibrant);
+document.getElementById("phone-navy").innerHTML    = buildPhone(THEMES.navy);
+</script>
+</body>
+</html>
