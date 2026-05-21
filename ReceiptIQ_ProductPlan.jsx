@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const SECTIONS = ["Overview","Market","Features","Analytics Reports","Architecture","Data Model","Roadmap","Platform Strategy"];
+const SECTIONS = ["Overview","Market","Features","Analytics Reports","Architecture","Data Model","Roadmap","Platform Strategy","Personalization"];
 
 const COMPETITORS = [
   { name:"Groceries Tracker", focus:"Grocery-only", strength:"AI OCR per item, store comparison, household sharing", gap:"No broad categories (medicine, electronics)", pricing:"Freemium", rating:"⭐ 4.6", badge:"Closest match", badgeColor:"#10b981" },
@@ -59,6 +59,9 @@ const FEATURES = [
       { f:"Barcode Scanner", d:"Scan product barcode to instantly look up current prices across vendors without a receipt." },
       { f:"Subscription Detection", d:"Identify recurring charges (streaming, memberships) from receipts. Track subscription spend." },
       { f:"Loyalty Card Tracker", d:"Track loyalty points and rewards across stores. Show value of unredeemed rewards." },
+      { f:"Item Watchlist", d:"Stocks-app style home screen list of your most purchased items. Each row shows item name, last price paid, store, trend arrow and % change vs. prior purchase. Search full purchase history to pin any item. Tap to see price history chart, vendor comparison, personal inflation %, and purchase frequency. Pin up to 20 items. User preference — opt-in." },
+      { f:"Live Home Screen Ticker", d:"Scrolling marquee strip on the home screen showing real-time spend context. User chooses content: upcoming bills due, weekly category spend so far, price alerts, or budget status. Tap any item to jump to detail. Speed and item count configurable. Can be paused. User preference — opt-in." },
+      { f:"Home Screen Preferences", d:"Full user control over home screen layout. Toggle on/off independently: Item Watchlist, Live Ticker, Quick Stats bar, AI Insights card, Upcoming Bills card, Recent Receipts list. Drag to reorder sections. Separate profiles for mobile and web. Default is a clean minimal view; power users can enable all widgets." },
     ]
   },
 ];
@@ -178,6 +181,51 @@ const ROADMAP = [
   { q:"Q2 2025", title:"Intelligence", color:"#10b981", items:["Item price history charts","Vendor price comparison (AI)","Store analytics deep-dive","Category trend reports","Inflation tracker","Mobile app feature parity"] },
   { q:"Q3 2025", title:"Smart Shopping", color:"#f59e0b", items:["Shopping list estimator","Store optimization AI","Budget alerts (push/email)","Predictive spend forecasting","Barcode scanner","Household / family mode"] },
   { q:"Q4 2025", title:"Growth & Scale", color:"#ec4899", items:["CSV / PDF export","Mint / YNAB integration","FSA/HSA tax report","Subscription detection","Loyalty card tracker","Public API for partners"] },
+  { q:"Q2 2026", title:"Personalisation", color:"#f97316", items:["Item Watchlist (Stocks-style)","Live Home Screen Ticker","Home Screen Preferences","Widget drag-to-reorder","Per-platform layout profiles","Power mode for all widgets"] },
+];
+
+const PERSONALIZATION = [
+  {
+    id:"watchlist", icon:"📈", color:"#6366f1", title:"Item Watchlist",
+    badge:"User preference — opt-in",
+    description:"A Stocks-app style home screen that shows your most purchased items at a glance — with live price trend indicators.",
+    detail:[
+      { label:"Home screen list", value:"Top 10 most purchased items auto-populated on first use" },
+      { label:"Each row shows", value:"Item name · Last price paid · Store · Trend arrow · % change vs. prior purchase" },
+      { label:"Color indicator", value:"Green / red vs. your personal historical average for that item" },
+      { label:"Search & pin", value:"Search full purchase history to find and pin any item to watchlist" },
+      { label:"Max pins", value:"Up to 20 items; auto-suggested based on purchase frequency" },
+      { label:"Tap → detail screen", value:"Price history chart, vendor comparison, personal inflation % (3mo/6mo/1yr), last purchased date + store, purchase frequency" },
+      { label:"Reorder", value:"Drag to rearrange watchlist order" },
+      { label:"Availability", value:"Mobile and full web portal" },
+    ]
+  },
+  {
+    id:"ticker", icon:"📺", color:"#10b981", title:"Live Home Screen Ticker",
+    badge:"User preference — opt-in",
+    description:"A scrolling marquee strip at the top of the home screen giving a live at-a-glance view of your financial pulse.",
+    detail:[
+      { label:"Content options", value:"Upcoming bills due in 7 days / Weekly category spend so far / Price alerts / Budget status per category" },
+      { label:"Interaction", value:"Tap any ticker item to jump directly to that detail screen" },
+      { label:"Customisation", value:"User selects which content types appear in the strip" },
+      { label:"Speed & density", value:"Scroll speed and number of items configurable in preferences" },
+      { label:"Pause", value:"Tap strip to pause; auto-resumes after 10 seconds" },
+      { label:"Example items", value:"'Groceries: $84 spent this week · Electricity bill due in 3 days · Milk up 12% at Walmart · Dining: 68% of budget used'" },
+    ]
+  },
+  {
+    id:"homeprefs", icon:"⚙️", color:"#f59e0b", title:"Home Screen Preferences",
+    badge:"Settings → Home Screen",
+    description:"Full user control over what appears on the home screen and in what order. Default is minimal; power users can enable maximum density.",
+    detail:[
+      { label:"Toggleable widgets", value:"Item Watchlist · Live Ticker · Quick Stats bar · AI Insights card · Upcoming Bills card · Recent Receipts list" },
+      { label:"Reorder", value:"Drag any section up or down to set preferred order" },
+      { label:"Platform profiles", value:"Separate layout preferences for mobile and web portal" },
+      { label:"Default view", value:"Clean minimal — Quick Stats + Recent Receipts only" },
+      { label:"Power mode", value:"All widgets enabled for maximum information density" },
+      { label:"Persistence", value:"Preferences saved per user account, sync across devices" },
+    ]
+  },
 ];
 
 // ──────────────────────────────────────────────────
@@ -203,7 +251,7 @@ export default function ProductPlan() {
             An AI-powered, multi-category expense tracker that turns paper receipts into deep financial intelligence — with item-level price history, cross-vendor comparison, and smart shopping list estimation.
           </p>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-            {[["4 Phases","Product Roadmap"],["35+","Analytics Reports"],["6-Layer","Tech Architecture"],["8 Competitors","Market Analysis"]].map(([v,l])=>(
+            {[["4 Phases","Product Roadmap"],["35+","Analytics Reports"],["6-Layer","Tech Architecture"],["9 Sections","Full Product Plan"]].map(([v,l])=>(
               <div key={l} style={{ background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"14px 16px", border:"1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, color:"#a5b4fc" }}>{v}</div>
                 <div style={{ fontSize:12, color:"#64748b", marginTop:3 }}>{l}</div>
@@ -500,6 +548,52 @@ export default function ProductPlan() {
     </div>
   );
 
+  const renderPersonalization = () => (
+    <div>
+      <div style={{ background:"#f0f9ff", borderRadius:12, padding:"14px 20px", marginBottom:24, border:"1px solid #bae6fd" }}>
+        <p style={{ color:"#0c4a6e", fontSize:14, margin:0 }}>All three features are user preferences — opt-in only. The default home screen stays clean and minimal. Users who want more density can enable any combination from Settings → Home Screen.</p>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+        {PERSONALIZATION.map((p,pi)=>(
+          <div key={pi} style={{ background:"#fff", border:`1px solid ${p.color}30`, borderRadius:14, overflow:"hidden" }}>
+            <div style={{ background:`${p.color}10`, padding:"16px 24px", borderBottom:`1px solid ${p.color}20`, display:"flex", alignItems:"center", gap:12 }}>
+              <span style={{ fontSize:24 }}>{p.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                  <span style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:16, color:"#0f172a" }}>{p.title}</span>
+                  <span style={{ fontSize:11, fontWeight:600, padding:"3px 10px", borderRadius:20, background:`${p.color}18`, color:p.color }}>{p.badge}</span>
+                </div>
+                <p style={{ fontSize:13, color:"#64748b", margin:0, lineHeight:1.5 }}>{p.description}</p>
+              </div>
+            </div>
+            <div style={{ padding:"8px 0" }}>
+              {p.detail.map((d,di)=>(
+                <div key={di} style={{ display:"grid", gridTemplateColumns:"200px 1fr", gap:16, padding:"10px 24px", borderBottom:di<p.detail.length-1?"1px solid #f8fafc":"none", alignItems:"flex-start" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.04em", paddingTop:2 }}>{d.label}</div>
+                  <div style={{ fontSize:13, color:"#334155", lineHeight:1.6 }}>{d.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h3 style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, color:"#1e293b", margin:"32px 0 16px" }}>How They Work Together</h3>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+        {[
+          ["Default user","Sees Quick Stats + Recent Receipts. No ticker, no watchlist. Clean and fast."],
+          ["Engaged user","Enables Watchlist + Ticker. Gets at-a-glance price trends and upcoming bills every time they open the app."],
+          ["Power user","All widgets on. Full density — watchlist, ticker, AI insights, bills, stats, receipts — everything visible on open."],
+        ].map(([t,d])=>(
+          <div key={t} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"16px 18px" }}>
+            <div style={{ fontWeight:600, fontSize:14, color:"#0f172a", marginBottom:8 }}>{t}</div>
+            <div style={{ fontSize:13, color:"#64748b", lineHeight:1.6 }}>{d}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderSection = () => {
     switch(active) {
       case "Overview": return renderOverview();
@@ -510,6 +604,7 @@ export default function ProductPlan() {
       case "Data Model": return renderDataModel();
       case "Roadmap": return renderRoadmap();
       case "Platform Strategy": return renderPlatform();
+      case "Personalization": return renderPersonalization();
       default: return null;
     }
   };
