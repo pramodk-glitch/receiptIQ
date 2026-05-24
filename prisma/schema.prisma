@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime  @default(now())
+  receipts     Receipt[]
+  items        ReceiptItem[]
+}
+
+model Receipt {
+  id           String        @id @default(uuid())
+  userId       String
+  storeName    String
+  storeChain   String?
+  receiptDate  DateTime
+  totalAmount  Float
+  currency     String        @default("USD")
+  imageUrl     String?
+  rawOcrText   String?
+  source       String        @default("manual") // manual | upload | amazon_csv | lambda_ocr
+  contentHash  String?
+  externalId   String?       // Amazon Order ID for CSV imports
+  autoIngested Boolean       @default(false)
+  needsReview  Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        ReceiptItem[]
+
+  @@index([userId])
+  @@index([contentHash])
+}
+
+model ReceiptItem {
+  id                 String   @id @default(uuid())
+  receiptId          String
+  userId             String
+  itemName           String
+  itemNameNormalized String
+  quantity           Float    @default(1)
+  unit               String?
+  unitPrice          Float
+  lineTotal          Float
+  category           String   @default("General")
+  brand              String?
+  asin               String?
+  createdAt          DateTime @default(now())
+  receipt            Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([receiptId])
+}
+
+model PriceHistory {
+  id                 String   @id @default(uuid())
+  itemNameNormalized String
+  storeChain         String
+  unitPrice          Float
+  unit               String?
+  capturedAt         DateTime @default(now())
+  source             String   @default("receipt")
+  userId             String
+
+  @@index([userId, itemNameNormalized])
+}
