@@ -10,6 +10,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { formatMonthYear } from "@/lib/utils";
+
 interface MonthlyTotal {
   month: string;
   total: number;
