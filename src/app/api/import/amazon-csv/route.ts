@@ -5,7 +5,8 @@ import { parseAmazonCsv } from "@/lib/amazon-csv";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = session?.user?.id;
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
       try {
         const existing = await prisma.receipt.findFirst({
           where: {
-            userId: session.user.id!,
+            userId: userId,
             externalId: order.orderId,
           },
         });
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         await prisma.$transaction(async (tx) => {
           const receipt = await tx.receipt.create({
             data: {
-              userId: session.user.id!,
+              userId: userId,
               storeName: "Amazon",
               storeChain: "Amazon",
               receiptDate: new Date(order.orderDate),
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
             await tx.receiptItem.createMany({
               data: order.items.map((item) => ({
                 receiptId: receipt.id,
-                userId: session.user.id!,
+                userId: userId,
                 itemName: item.title,
                 itemNameNormalized: item.title.toLowerCase().trim(),
                 quantity: item.quantity,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
                 unitPrice: item.unitPrice,
                 capturedAt: new Date(order.orderDate),
                 source: "amazon_csv",
-                userId: session.user.id!,
+                userId: userId,
               })),
           });
         });
