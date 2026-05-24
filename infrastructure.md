@@ -50,6 +50,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 | **Cognito** | User Pool · first 50k MAU free | Email/password + Google OAuth |
 | **Secrets Manager** | 2 secrets | Claude API key · DB password |
 | **Certificate Manager** | Free SSL | HTTPS on EC2 via ACM + ALB (optional) |
+| **Amazon CSV parser** | Built into API | No extra AWS service — CSV parsed in-memory on upload |
 
 ### MVP Architecture Diagram
 
@@ -94,12 +95,17 @@ graph TD
 flowchart TD
     A["🖥️ User opens web app\nLogs in via Cognito"]
     A --> B["📎 Uploads receipt\nphoto · PDF · screenshot"]
+    A --> CSV["📦 Uploads Amazon CSV\norder history export"]
     B --> C["🪣 S3\nImage stored in private bucket"]
     C --> D["⚡ Lambda triggered\nS3 PutObject event"]
     D --> E["🧠 Claude Vision OCR\nExtracts store · date · items · prices · totals"]
+    CSV --> PARSE["⚙️ CSV parser\nMaps Order ID · items · prices · dates"]
     E --> F{"🔁 Duplicate check\npHash + SHA-256 fingerprint"}
+    PARSE --> FP{"🔁 Duplicate check\nOrder ID hash"}
     F -->|"duplicate found"| G["⚠️ Duplicate screen\nDiscard · Keep Both · Merge"]
     F -->|"unique"| H["🗄️ Saved to PostgreSQL\nreceipts + receipt_items + price_history"]
+    FP -->|"duplicate"| SKIP["⏭ Skipped\nalready imported"]
+    FP -->|"unique"| H
     G --> H
     H --> I["📊 Dashboard updated\nSpend totals · category chart · receipt list"]
     I --> J["🔍 Receipt detail view\nAll line items · edit · delete"]
@@ -126,6 +132,7 @@ flowchart TD
 | Data transfer | ~$0.50 |
 | **AWS subtotal** | **~$23/month** |
 | Claude API (~200 scans) | ~$3–4 |
+| Amazon CSV import | $0 (no API cost — structured data) |
 | **Grand total** | **~$27/month** |
 
 ---
