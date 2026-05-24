@@ -1,0 +1,492 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ReceiptIQ MVP — VPC, RDS, Lambda OCR, EC2, CloudFront"
+
+Parameters:
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL master password
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Description: Anthropic API key (placeholder OK for now)
+  NextAuthSecret:
+    Type: String
+    NoEcho: true
+    Description: NextAuth.js secret
+  ReceiptsBucket:
+    Type: String
+    Default: receiptiq-receipts-27762382
+    Description: Pre-created S3 bucket for receipt images
+  CodeBucket:
+    Type: String
+    Default: receiptiq-code-27762382
+    Description: Pre-created S3 bucket with Lambda zip
+  Ec2KeyName:
+    Type: String
+    Default: receiptiq-key
+    Description: EC2 Key Pair name
+  AllowedSshCidr:
+    Type: String
+    Default: "0.0.0.0/0"
+
+# ── VPC ────────────────────────────────────────────────────────────────────────
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: receiptiq-vpc}]
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{Key: Name, Value: receiptiq-igw}]
+
+  IGWAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: receiptiq-public-a}]
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: receiptiq-public-b}]
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.11.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{Key: Name, Value: receiptiq-private-a}]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.12.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags: [{Key: Name, Value: receiptiq-private-b}]
+
+  PublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{Key: Name, Value: receiptiq-public-rt}]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttach
+    Properties:
+      RouteTableId: !Ref PublicRT
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref IGW
+
+  PublicRTAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRT
+
+  PublicRTAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRT
+
+# ── Security Groups ────────────────────────────────────────────────────────────
+
+  EC2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: receiptiq-ec2-sg
+      GroupDescription: EC2 app server
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSshCidr
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags: [{Key: Name, Value: receiptiq-ec2-sg}]
+
+  LambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: receiptiq-lambda-sg
+      GroupDescription: Lambda OCR processor
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags: [{Key: Name, Value: receiptiq-lambda-sg}]
+
+  RDSSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: receiptiq-rds-sg
+      GroupDescription: RDS PostgreSQL
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SG
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSG
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags: [{Key: Name, Value: receiptiq-rds-sg}]
+
+# ── Secrets Manager ────────────────────────────────────────────────────────────
+
+  AnthropicSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: receiptiq/anthropic-api-key
+      SecretString: !Ref AnthropicApiKey
+
+  NextAuthSecretSM:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: receiptiq/nextauth-secret
+      SecretString: !Ref NextAuthSecret
+
+# DB secret is created after RDS so we know the endpoint — built via SSM param trick:
+# We create it as a plain string for now and update after RDS is ready.
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: receiptiq/db-url
+      # Placeholder updated by user_data once RDS endpoint is known at boot
+      SecretString: !Sub "postgresql://receiptiq:${DbPassword}@placeholder/receiptiq"
+
+# ── RDS PostgreSQL ─────────────────────────────────────────────────────────────
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: ReceiptIQ DB subnet group
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags: [{Key: Name, Value: receiptiq-db-subnet}]
+
+  PostgresDB:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: receiptiq-db
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: "16.6"
+      MasterUsername: receiptiq
+      MasterUserPassword: !Ref DbPassword
+      DBName: receiptiq
+      AllocatedStorage: "20"
+      StorageType: gp2
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [!Ref RDSSG]
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      StorageEncrypted: true
+      Tags: [{Key: Name, Value: receiptiq-db}]
+
+# Update DB secret with real endpoint via a custom resource would be complex;
+# instead user_data.sh dynamically builds the connection string from known parts.
+
+# ── CloudFront for receipt images ──────────────────────────────────────────────
+
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: receiptiq-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistro:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: ReceiptIQ receipt images
+        Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: s3-receipts
+            DomainName: !Sub "${ReceiptsBucket}.s3.amazonaws.com"
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: s3-receipts
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+      Tags: [{Key: Name, Value: receiptiq-cdn}]
+
+# ── IAM: Lambda role ───────────────────────────────────────────────────────────
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: receiptiq-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: receiptiq-lambda-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:aws:s3:::${ReceiptsBucket}/*"
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource:
+                  - !Ref DbSecret
+                  - !Ref AnthropicSecret
+
+# ── IAM: EC2 role ─────────────────────────────────────────────────────────────
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: receiptiq-ec2-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: receiptiq-ec2-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource: !Sub "arn:aws:s3:::${ReceiptsBucket}/*"
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource:
+                  - !Ref DbSecret
+                  - !Ref AnthropicSecret
+                  - !Ref NextAuthSecretSM
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: receiptiq-ec2-profile
+      Roles: [!Ref EC2Role]
+
+# ── Lambda Function ────────────────────────────────────────────────────────────
+
+  OcrLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: receiptiq-ocr-processor
+      Role: !GetAtt LambdaRole.Arn
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Timeout: 120
+      MemorySize: 512
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: ocr-processor.zip
+      Environment:
+        Variables:
+          AWS_REGION_NAME: !Ref AWS::Region
+          DB_SECRET_ARN: !Ref DbSecret
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          CLOUDFRONT_DOMAIN: !GetAtt CloudFrontDistro.DomainName
+      VpcConfig:
+        SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+        SecurityGroupIds: [!Ref LambdaSG]
+
+  LambdaS3Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OcrLambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${ReceiptsBucket}"
+
+# ── EC2 Key Pair ───────────────────────────────────────────────────────────────
+
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref Ec2KeyName
+
+# ── EC2 Instance ───────────────────────────────────────────────────────────────
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: [PostgresDB, IGWAttach]
+    Properties:
+      ImageId: ami-02fd066b86800f60c
+      InstanceType: t3.micro
+      KeyName: !Ref EC2KeyPair
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroupIds: [!Ref EC2SG]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          exec > /var/log/receiptiq-startup.log 2>&1
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+
+          apt-get update -y
+          apt-get install -y docker.io docker-compose-plugin git curl jq unzip
+          systemctl enable docker
+          systemctl start docker
+
+          mkdir -p /opt/receiptiq
+
+          # All values injected by CloudFormation — no AWS CLI needed at boot
+          DB_URL="postgresql://receiptiq:${DbPassword}@${PostgresDB.Endpoint.Address}:5432/receiptiq"
+          NEXTAUTH_SECRET_VAL="${NextAuthSecret}"
+          ANTHROPIC_KEY="${AnthropicApiKey}"
+          CF_DOMAIN="${CloudFrontDistro.DomainName}"
+          S3_BUCKET="${ReceiptsBucket}"
+          REGION="${AWS::Region}"
+
+          EC2_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+          cat > /opt/receiptiq/.env <<'ENVEOF'
+          DATABASE_URL=REPLACE_DB_URL
+          NEXTAUTH_SECRET=REPLACE_NEXTAUTH
+          NEXTAUTH_URL=REPLACE_URL
+          ANTHROPIC_API_KEY=REPLACE_ANTHROPIC
+          AWS_REGION=REPLACE_REGION
+          S3_BUCKET_NAME=REPLACE_S3
+          CLOUDFRONT_DOMAIN=REPLACE_CF
+          NODE_ENV=production
+          ENVEOF
+
+          sed -i "s|REPLACE_DB_URL|$DB_URL|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_NEXTAUTH|$NEXTAUTH_SECRET_VAL|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_URL|http://$EC2_PUBLIC_IP|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_ANTHROPIC|$ANTHROPIC_KEY|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_REGION|$REGION|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_S3|$S3_BUCKET|" /opt/receiptiq/.env
+          sed -i "s|REPLACE_CF|$CF_DOMAIN|" /opt/receiptiq/.env
+          chmod 600 /opt/receiptiq/.env
+
+          git clone https://github.com/pramodk-glitch/receiptIQ.git /opt/receiptiq/repo
+          cd /opt/receiptiq/repo
+          git checkout develop
+          cp /opt/receiptiq/.env .env
+          # Strip leading spaces from env file values
+          sed -i 's/^[[:space:]]*//' .env
+
+          docker build -t receiptiq/app:latest .
+
+          docker run --rm --env-file /opt/receiptiq/.env receiptiq/app:latest \
+            sh -c "npx prisma migrate deploy"
+
+          docker run -d \
+            --name receiptiq \
+            --restart unless-stopped \
+            -p 80:3000 \
+            --env-file /opt/receiptiq/.env \
+            receiptiq/app:latest
+
+          echo "ReceiptIQ started successfully at $(date)"
+
+      Tags: [{Key: Name, Value: receiptiq-app}]
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref EC2Instance
+      Tags: [{Key: Name, Value: receiptiq-eip}]
+
+Mappings:
+  RegionAMI:
+    us-east-1:
+      ubuntu: ami-02fd066b86800f60c
+    us-west-2:
+      ubuntu: ami-05d38da78ce859165
+
+Outputs:
+  AppPublicIP:
+    Value: !Ref EIP
+    Description: App server public IP
+
+  AppURL:
+    Value: !Sub "http://${EIP}"
+    Description: Application URL
+
+  CloudFrontDomain:
+    Value: !GetAtt CloudFrontDistro.DomainName
+    Description: CloudFront domain for receipt images
+
+  RdsEndpoint:
+    Value: !GetAtt PostgresDB.Endpoint.Address
+    Description: RDS endpoint
+
+  DbSecretArn:
+    Value: !Ref DbSecret
+    Description: DB connection string secret ARN
