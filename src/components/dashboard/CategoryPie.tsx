@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   PieChart,
   Pie,
@@ -53,10 +54,13 @@ const CustomTooltip = ({
 };
 
 export function CategoryPie({ data }: CategoryPieProps) {
-  if (data.length === 0) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
-        No category data available yet.
+        {data.length === 0 ? "No category data available yet." : "Loading chart…"}
       </div>
     );
   }

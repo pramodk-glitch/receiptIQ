@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -43,15 +44,20 @@ const CustomTooltip = ({
 };
 
 export function SpendingChart({ data }: SpendingChartProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const chartData = data.map((d) => ({
     ...d,
     label: formatMonthYear(d.month),
   }));
 
-  if (chartData.length === 0) {
+  if (!mounted || chartData.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
-        No spending data yet. Upload your first receipt to get started.
+        {chartData.length === 0
+          ? "No spending data yet. Upload your first receipt to get started."
+          : "Loading chart…"}
       </div>
     );
   }

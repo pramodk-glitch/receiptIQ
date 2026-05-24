@@ -5,28 +5,62 @@ import { SpendingChart } from "@/components/dashboard/SpendingChart";
 import { CategoryPie } from "@/components/dashboard/CategoryPie";
 import { RecentReceipts } from "@/components/dashboard/RecentReceipts";
 import { formatCurrency } from "@/lib/utils";
+import { prisma } from "@/lib/db";
 
 async function getAnalytics(userId: string) {
-  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const res = await fetch(`${baseUrl}/api/analytics?userId=${userId}`, {
-    cache: "no-store",
-    headers: {
-      "x-internal-user-id": userId,
-    },
-  });
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  if (!res.ok) {
-    return {
-      monthlyTotals: [],
-      categoryBreakdown: [],
-      recentReceipts: [],
-      totalThisMonth: 0,
-      topCategory: "N/A",
-      receiptCount: 0,
-    };
-  }
+  const [monthlyRaw, categoryRaw, recentRaw, totalThisMonthRaw, receiptCount] =
+    await Promise.all([
+      prisma.$queryRaw<Array<{ month: string; total: number }>>`
+        SELECT
+          to_char(DATE_TRUNC('month', "receiptDate"), 'YYYY-MM') AS month,
+          CAST(SUM("totalAmount") AS float) AS total
+        FROM "Receipt"
+        WHERE "userId" = ${userId}
+          AND "receiptDate" >= NOW() - INTERVAL '12 months'
+        GROUP BY DATE_TRUNC('month', "receiptDate")
+        ORDER BY DATE_TRUNC('month', "receiptDate") ASC
+      `,
+      prisma.$queryRaw<Array<{ category: string; total: number }>>`
+        SELECT
+          ri.category,
+          CAST(SUM(ri."lineTotal") AS float) AS total
+        FROM "ReceiptItem" ri
+        WHERE ri."userId" = ${userId}
+        GROUP BY ri.category
+        ORDER BY total DESC
+      `,
+      prisma.receipt.findMany({
+        where: { userId },
+        orderBy: { receiptDate: "desc" },
+        take: 10,
+        include: { _count: { select: { items: true } } },
+      }),
+      prisma.receipt.aggregate({
+        where: { userId, receiptDate: { gte: startOfMonth } },
+        _sum: { totalAmount: true },
+      }),
+      prisma.receipt.count({ where: { userId } }),
+    ]);
 
-  return res.json();
+  return {
+    monthlyTotals: monthlyRaw.map((r) => ({ month: r.month, total: Number(r.total) })),
+    categoryBreakdown: categoryRaw.map((r) => ({ category: r.category, total: Number(r.total) })),
+    recentReceipts: recentRaw.map((r) => ({
+      id: r.id,
+      storeName: r.storeName,
+      receiptDate: r.receiptDate.toISOString(),
+      totalAmount: r.totalAmount,
+      currency: r.currency,
+      source: r.source,
+      itemCount: r._count.items,
+    })),
+    totalThisMonth: Number(totalThisMonthRaw._sum.totalAmount ?? 0),
+    topCategory: categoryRaw.length > 0 ? categoryRaw[0].category : "N/A",
+    receiptCount,
+  };
 }
 
 export default async function DashboardPage() {
