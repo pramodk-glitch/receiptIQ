@@ -1,15 +1,12 @@
-import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default NextAuth(authConfig).auth;
+// Lightweight middleware — auth is enforced at the page/API level.
+// NextAuth v5 host-checking in Edge runtime is bypassed here.
+export function middleware(request: NextRequest) {
+  return NextResponse.next();
+}
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/receipts/:path*",
-    "/import/:path*",
-    "/manual-entry/:path*",
-    "/login",
-    "/register",
-  ],
+  matcher: [],
 };
