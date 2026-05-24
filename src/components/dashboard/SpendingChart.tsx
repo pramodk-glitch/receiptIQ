@@ -10,8 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { formatMonthYear } from "@/lib/utils";
-
 interface MonthlyTotal {
   month: string;
   total: number;
@@ -33,7 +31,7 @@ const CustomTooltip = ({
   if (active && payload && payload.length && label) {
     return (
       <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
-        <p className="text-sm font-medium text-slate-700">{formatMonthYear(label)}</p>
+        <p className="text-sm font-medium text-slate-700">{label}</p>
         <p className="text-lg font-bold text-indigo-600">
           ${payload[0].value.toFixed(2)}
         </p>
