@@ -1,9 +1,11 @@
-import NextAuth, { type NextAuthConfig } from "next-auth";
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcryptjs from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { authConfig } from "@/lib/auth.config";
 
-export const authConfig: NextAuthConfig = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -12,9 +14,7 @@ export const authConfig: NextAuthConfig = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+        if (!credentials?.email || !credentials?.password) return null;
 
         const email = credentials.email as string;
         const password = credentials.password as string;
@@ -36,10 +36,8 @@ export const authConfig: NextAuthConfig = {
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -54,35 +52,5 @@ export const authConfig: NextAuthConfig = {
       }
       return session;
     },
-    async authorized({ auth: session, request: { nextUrl } }) {
-      const isLoggedIn = !!session?.user;
-      const isAuthPage =
-        nextUrl.pathname === "/login" || nextUrl.pathname === "/register";
-      const isProtected =
-        nextUrl.pathname.startsWith("/dashboard") ||
-        nextUrl.pathname.startsWith("/receipts") ||
-        nextUrl.pathname.startsWith("/import") ||
-        nextUrl.pathname.startsWith("/manual-entry");
-
-      if (isProtected && !isLoggedIn) {
-        const loginUrl = new URL("/login", nextUrl);
-        loginUrl.searchParams.set("callbackUrl", nextUrl.pathname);
-        return Response.redirect(loginUrl);
-      }
-
-      if (isAuthPage && isLoggedIn) {
-        return Response.redirect(new URL("/dashboard", nextUrl));
-      }
-
-      return true;
-    },
   },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-  secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
-};
-
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+});
