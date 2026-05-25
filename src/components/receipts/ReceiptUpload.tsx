@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
-import crypto from "crypto";
 
 type UploadState = "idle" | "reading" | "presigning" | "uploading" | "saving" | "done" | "error";
 
@@ -63,10 +62,14 @@ export function ReceiptUpload() {
   };
 
   const computeFileHash = async (file: File): Promise<string> => {
-    const buffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    // crypto.subtle requires HTTPS — use a djb2 hash over file bytes instead
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    let hash = 5381;
+    for (let i = 0; i < buffer.length; i++) {
+      hash = ((hash << 5) + hash) ^ buffer[i];
+      hash = hash >>> 0;
+    }
+    return `${file.size}-${file.lastModified}-${hash.toString(16)}`;
   };
 
   const handleUpload = async () => {
