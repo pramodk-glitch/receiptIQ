@@ -2,6 +2,7 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
+import sharp from "sharp";
 
 const { Pool } = pg;
 
@@ -67,6 +68,36 @@ function validateOcrResult(data) {
 }
 
 
+// Anthropic base64 image limit is 5 MB (5242880 bytes). Resize if needed.
+const ANTHROPIC_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+const ANTHROPIC_MAX_DIMENSION = 7900; // Anthropic hard limit is 8000px per dimension
+
+async function resizeIfNeeded(imageBuffer, contentType) {
+  if (contentType === "application/pdf") return imageBuffer;
+  const meta = await sharp(imageBuffer).metadata();
+  const w = meta.width ?? 2048;
+  const h = meta.height ?? 2048;
+  const base64Len = Math.ceil(imageBuffer.length * 4 / 3);
+  const needsDimensionCap = w > ANTHROPIC_MAX_DIMENSION || h > ANTHROPIC_MAX_DIMENSION;
+  const needsSizeCap = base64Len > ANTHROPIC_MAX_IMAGE_BYTES;
+  if (!needsDimensionCap && !needsSizeCap) return imageBuffer;
+
+  // Fit within 7900×7900 and target 3.5 MB base64
+  let targetW = w;
+  let targetH = h;
+  if (needsDimensionCap) {
+    const dimScale = Math.min(ANTHROPIC_MAX_DIMENSION / w, ANTHROPIC_MAX_DIMENSION / h);
+    targetW = Math.floor(w * dimScale);
+    targetH = Math.floor(h * dimScale);
+  }
+  console.log(`Resizing image ${w}×${h} (${imageBuffer.length} bytes) → ${targetW}×${targetH}`);
+  return sharp(imageBuffer)
+    .resize({ width: targetW, height: targetH, fit: "inside" })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+}
+
 async function extractReceiptFromImage(imageBuffer, contentType) {
   const client = getAnthropic();
   const normalizedType = contentType?.toLowerCase() ?? "image/jpeg";
@@ -81,9 +112,13 @@ async function extractReceiptFromImage(imageBuffer, contentType) {
     "image/webp": "image/webp",
   };
 
+  const processedBuffer = await resizeIfNeeded(imageBuffer, normalizedType);
+  // After JPEG conversion via sharp, treat as image/jpeg
+  const finalMediaType = isPdf ? "application/pdf" : (processedBuffer !== imageBuffer ? "image/jpeg" : (mediaTypeMap[normalizedType] ?? "image/jpeg"));
+
   const receiptContent = isPdf
-    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: imageBuffer.toString("base64") } }
-    : { type: "image", source: { type: "base64", media_type: mediaTypeMap[normalizedType] ?? "image/jpeg", data: imageBuffer.toString("base64") } };
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: processedBuffer.toString("base64") } }
+    : { type: "image", source: { type: "base64", media_type: finalMediaType, data: processedBuffer.toString("base64") } };
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
@@ -153,14 +188,21 @@ export const handler = async (event) => {
       const db = await getDb();
       const imageUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${key}`;
 
-      // Find the receipt record created when the presigned URL was used
-      const receiptRes = await db.query(
-        `SELECT id, "userId" FROM receipts WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
-        [key]
-      );
+      // Find the receipt record created when the presigned URL was used.
+      // Retry up to 5 times — Lambda fires before the app finishes POST /api/receipts.
+      let receiptRes = { rows: [] };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+        receiptRes = await db.query(
+          `SELECT id, "userId" FROM "Receipt" WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
+          [imageUrl]
+        );
+        if (receiptRes.rows.length > 0) break;
+        console.log(`Receipt not found yet (attempt ${attempt + 1}/5), retrying...`);
+      }
 
       if (receiptRes.rows.length === 0) {
-        console.warn(`No receipt found for key ${key} — creating one`);
+        console.warn(`No receipt found for key ${key} after retries — creating one`);
         // Extract userId from key pattern: receipts/{userId}/{uuid}.ext
         const parts = key.split("/");
         const userId = parts[1];
@@ -170,14 +212,14 @@ export const handler = async (event) => {
         }
 
         await db.query(
-          `INSERT INTO receipts (id, "userId", "storeName", "storeChain", "receiptDate", "totalAmount", currency, "imageUrl", "rawOcrText", source, "createdAt")
+          `INSERT INTO "Receipt" (id, "userId", "storeName", "storeChain", "receiptDate", "totalAmount", currency, "imageUrl", "rawOcrText", source, "createdAt")
            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, 'upload', NOW())`,
-          [userId, ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, key, JSON.stringify(ocrResult)]
+          [userId, ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, imageUrl, JSON.stringify(ocrResult)]
         );
 
         const newReceipt = await db.query(
-          `SELECT id FROM receipts WHERE "imageUrl" = $1 LIMIT 1`,
-          [key]
+          `SELECT id FROM "Receipt" WHERE "imageUrl" = $1 LIMIT 1`,
+          [imageUrl]
         );
         if (newReceipt.rows.length === 0) continue;
 
@@ -187,7 +229,7 @@ export const handler = async (event) => {
         const { id: receiptId, userId } = receiptRes.rows[0];
 
         await db.query(
-          `UPDATE receipts SET "storeName"=$1, "storeChain"=$2, "receiptDate"=$3, "totalAmount"=$4, currency=$5, "rawOcrText"=$6, "imageUrl"=$7 WHERE id=$8`,
+          `UPDATE "Receipt" SET "storeName"=$1, "storeChain"=$2, "receiptDate"=$3, "totalAmount"=$4, currency=$5, "rawOcrText"=$6, "imageUrl"=$7 WHERE id=$8`,
           [ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, JSON.stringify(ocrResult), imageUrl, receiptId]
         );
 
@@ -203,18 +245,18 @@ export const handler = async (event) => {
 
 async function insertItems(db, receiptId, userId, ocrResult) {
   // Delete any existing items for this receipt (idempotent)
-  await db.query(`DELETE FROM "receipt_items" WHERE "receiptId" = $1`, [receiptId]);
+  await db.query(`DELETE FROM "ReceiptItem" WHERE "receiptId" = $1`, [receiptId]);
 
   for (const item of ocrResult.items) {
     await db.query(
-      `INSERT INTO "receipt_items" (id, "receiptId", "userId", "itemName", "itemNameNormalized", quantity, "unitPrice", "lineTotal", category, "createdAt")
+      `INSERT INTO "ReceiptItem" (id, "receiptId", "userId", "itemName", "itemNameNormalized", quantity, "unitPrice", "lineTotal", category, "createdAt")
        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
       [receiptId, userId, item.item_name, item.item_name.toLowerCase().trim(), item.quantity, item.unit_price, item.line_total, item.category]
     );
 
     if (item.unit_price > 0) {
       await db.query(
-        `INSERT INTO "price_history" (id, "itemNameNormalized", "storeChain", "unitPrice", "capturedAt", source, "userId")
+        `INSERT INTO "PriceHistory" (id, "itemNameNormalized", "storeChain", "unitPrice", "capturedAt", source, "userId")
          VALUES (gen_random_uuid(), $1, $2, $3, NOW(), 'receipt', $4)`,
         [item.item_name.toLowerCase().trim(), ocrResult.store_chain || ocrResult.store_name, item.unit_price, userId]
       );

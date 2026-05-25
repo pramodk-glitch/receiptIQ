@@ -13,8 +13,8 @@ export default async function ReceiptsPage() {
 
   const receipts = await prisma.receipt.findMany({
     where: { userId: session.user.id },
-    orderBy: { receiptDate: "desc" },
-    take: 50,
+    orderBy: { createdAt: "desc" },
+    take: 100,
     include: {
       _count: { select: { items: true } },
     },
