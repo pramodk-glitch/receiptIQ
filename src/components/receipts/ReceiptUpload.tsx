@@ -20,11 +20,11 @@ export function ReceiptUpload() {
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+  const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "application/pdf"];
 
   const handleFile = useCallback((file: File) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setErrorMessage("Please upload a JPEG, PNG, WebP, or GIF image.");
+      setErrorMessage("Please upload a JPEG, PNG, WebP, GIF, or PDF file.");
       return;
     }
 
@@ -36,11 +36,15 @@ export function ReceiptUpload() {
     setErrorMessage(null);
     setSelectedFile(file);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (file.type !== "application/pdf") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPreview(null);
+    }
   }, []);
 
   const handleDrop = useCallback(
@@ -194,7 +198,7 @@ export function ReceiptUpload() {
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif,application/pdf"
             onChange={handleFileInput}
           />
 
@@ -225,7 +229,7 @@ export function ReceiptUpload() {
                 or <span className="text-indigo-600 font-medium">click to browse</span>
               </p>
               <p className="text-xs text-slate-400 mt-2">
-                JPEG, PNG, WebP, GIF — up to 20 MB
+                JPEG, PNG, WebP, GIF, PDF — up to 20 MB
               </p>
             </div>
           </div>
@@ -233,12 +237,20 @@ export function ReceiptUpload() {
       ) : (
         <div className="space-y-4">
           <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-            {preview && (
+            {preview ? (
               <img
                 src={preview}
                 alt="Receipt preview"
                 className="w-full max-h-96 object-contain"
               />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <svg className="w-16 h-16 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 3v6h6" />
+                </svg>
+                <p className="text-sm font-medium text-slate-600">PDF ready to upload</p>
+              </div>
             )}
             <button
               onClick={resetUpload}
