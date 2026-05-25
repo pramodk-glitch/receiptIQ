@@ -96,9 +96,34 @@ async function extractReceiptFromImage(imageBuffer, contentType) {
           {
             type: "text",
             text: `Extract all line items from this receipt${isPdf ? " document" : " image"}. Return JSON:
+{
+  "store_name": string,
+  "store_chain": string,
+  "receipt_date": "YYYY-MM-DD",
+  "total_amount": number,
+  "currency": "USD",
+  "items": [{"item_name": string, "quantity": number, "unit_price": number, "line_total": number, "category": string}]
+}
+For category use only: Groceries | Electronics | Dining | Medicine | Household | Personal Care | Travel | Entertainment | General
+Return only valid JSON, no markdown.`,
+          },
+        ],
+      },
+    ],
+  });
 
+  const text = message.content[0]?.type === "text" ? message.content[0].text : "";
+  const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Failed to parse OCR response: ${cleaned.substring(0, 200)}`);
+  }
 
+  return validateOcrResult(parsed);
+}
 
 async function streamToBuffer(stream) {
   const chunks = [];
