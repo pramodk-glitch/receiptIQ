@@ -26,7 +26,7 @@ async function getDb() {
     connectionString = await getSecret(process.env.DB_SECRET_ARN);
   }
 
-  dbPool = new Pool({ connectionString, max: 1, idleTimeoutMillis: 10000 });
+  dbPool = new Pool({ connectionString, max: 1, idleTimeoutMillis: 10000, ssl: { rejectUnauthorized: false } });
   return dbPool;
 }
 
