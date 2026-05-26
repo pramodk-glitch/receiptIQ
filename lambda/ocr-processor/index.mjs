@@ -122,7 +122,7 @@ async function extractReceiptFromImage(imageBuffer, contentType) {
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -130,17 +130,16 @@ async function extractReceiptFromImage(imageBuffer, contentType) {
           receiptContent,
           {
             type: "text",
-            text: `Extract all line items from this receipt${isPdf ? " document" : " image"}. Return JSON:
-{
-  "store_name": string,
-  "store_chain": string,
-  "receipt_date": "YYYY-MM-DD",
-  "total_amount": number,
-  "currency": "USD",
-  "items": [{"item_name": string, "quantity": number, "unit_price": number, "line_total": number, "category": string}]
-}
-For category use only: Groceries | Electronics | Dining | Medicine | Household | Personal Care | Travel | Entertainment | General
-Return only valid JSON, no markdown.`,
+            text: `You are a receipt parser. Extract data from this receipt${isPdf ? " document" : " image"} and return ONLY a JSON object — no explanation, no markdown, no other text.
+
+JSON schema:
+{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
+
+Rules:
+- store_name and store_chain: read the store name/logo printed on the receipt header. Never infer from product brand names on the items. If you see "Target" anywhere on the receipt, store_name is "Target".
+- category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General
+- If an item is unclear, use your best estimate rather than skipping it
+- Output ONLY the JSON object, nothing else`,
           },
         ],
       },
