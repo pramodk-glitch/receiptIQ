@@ -53,6 +53,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy-lambda:
+    name: Deploy OCR Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Lambda dependencies (linux-x64 for Lambda runtime)
+        working-directory: lambda/ocr-processor
+        run: npm ci
+
+      - name: Package Lambda
+        working-directory: lambda/ocr-processor
+        run: zip -r ../../lambda.zip .
+
+      - name: Deploy Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name receiptiq-ocr-processor \
+            --zip-file fileb://lambda.zip \
+            --region ${{ env.AWS_REGION }}
+
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
@@ -81,10 +116,11 @@ jobs:
             --parameters "{\"commands\":[
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
               \"docker pull ${IMAGE}\",
+              \"docker network create receiptiq_net 2>/dev/null || true\",
               \"docker stop receiptiq || true\",
               \"docker rm receiptiq || true\",
-              \"docker network create receiptiq_net 2>/dev/null || true\",
               \"docker run -d --name receiptiq --network receiptiq_net --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped ${IMAGE}\",
+              \"sleep 8 && docker inspect -f '{{.State.Running}}' receiptiq | grep -q true || (docker logs receiptiq --tail 30 && exit 1)\",
               \"docker image prune -f\"
             ]}" \
             --region ${{ env.AWS_REGION }} \
