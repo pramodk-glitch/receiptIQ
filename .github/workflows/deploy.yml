@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - claude/hopeful-ride-S72HO
   workflow_dispatch:
 
 env:
@@ -82,7 +83,8 @@ jobs:
               \"docker pull ${IMAGE}\",
               \"docker stop receiptiq || true\",
               \"docker rm receiptiq || true\",
-              \"docker run -d --name receiptiq --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped ${IMAGE}\",
+              \"docker network create receiptiq_net 2>/dev/null || true\",
+              \"docker run -d --name receiptiq --network receiptiq_net --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped ${IMAGE}\",
               \"docker image prune -f\"
             ]}" \
             --region ${{ env.AWS_REGION }} \
