@@ -1,8 +1,6 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
-import sharp from "sharp";
 
 const { Pool } = pg;
 
@@ -10,7 +8,6 @@ const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
-let anthropicClient = null;
 
 async function getSecret(secretName) {
   const cmd = new GetSecretValueCommand({ SecretId: secretName });
@@ -29,13 +26,6 @@ async function getDb() {
 
   dbPool = new Pool({ connectionString, max: 1, idleTimeoutMillis: 10000, ssl: { rejectUnauthorized: false } });
   return dbPool;
-}
-
-function getAnthropic() {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  }
-  return anthropicClient;
 }
 
 function normalizeCategory(raw) {
@@ -67,96 +57,32 @@ function validateOcrResult(data) {
   };
 }
 
-
-// Anthropic base64 image limit is 5 MB (5242880 bytes). Resize if needed.
-const ANTHROPIC_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-const ANTHROPIC_MAX_DIMENSION = 7900; // Anthropic hard limit is 8000px per dimension
-
-async function resizeIfNeeded(imageBuffer, contentType) {
-  if (contentType === "application/pdf") return imageBuffer;
-  const meta = await sharp(imageBuffer).metadata();
-  const w = meta.width ?? 2048;
-  const h = meta.height ?? 2048;
-  const base64Len = Math.ceil(imageBuffer.length * 4 / 3);
-  const needsDimensionCap = w > ANTHROPIC_MAX_DIMENSION || h > ANTHROPIC_MAX_DIMENSION;
-  const needsSizeCap = base64Len > ANTHROPIC_MAX_IMAGE_BYTES;
-  if (!needsDimensionCap && !needsSizeCap) return imageBuffer;
-
-  // Fit within 7900×7900 and target 3.5 MB base64
-  let targetW = w;
-  let targetH = h;
-  if (needsDimensionCap) {
-    const dimScale = Math.min(ANTHROPIC_MAX_DIMENSION / w, ANTHROPIC_MAX_DIMENSION / h);
-    targetW = Math.floor(w * dimScale);
-    targetH = Math.floor(h * dimScale);
-  }
-  console.log(`Resizing image ${w}×${h} (${imageBuffer.length} bytes) → ${targetW}×${targetH}`);
-  return sharp(imageBuffer)
-    .resize({ width: targetW, height: targetH, fit: "inside" })
-    .jpeg({ quality: 85 })
-    .toBuffer();
-}
-
 async function extractReceiptFromImage(imageBuffer, contentType) {
-  const client = getAnthropic();
-  const normalizedType = contentType?.toLowerCase() ?? "image/jpeg";
+  const serverUrl = process.env.DONUT_SERVER_URL;
+  if (!serverUrl) throw new Error("DONUT_SERVER_URL is not set");
 
-  const isPdf = normalizedType === "application/pdf";
+  const apiKey = process.env.DONUT_API_KEY ?? "";
 
-  const mediaTypeMap = {
-    "image/jpeg": "image/jpeg",
-    "image/jpg": "image/jpeg",
-    "image/png": "image/png",
-    "image/gif": "image/gif",
-    "image/webp": "image/webp",
-  };
-
-  const processedBuffer = await resizeIfNeeded(imageBuffer, normalizedType);
-  // After JPEG conversion via sharp, treat as image/jpeg
-  const finalMediaType = isPdf ? "application/pdf" : (processedBuffer !== imageBuffer ? "image/jpeg" : (mediaTypeMap[normalizedType] ?? "image/jpeg"));
-
-  const receiptContent = isPdf
-    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: processedBuffer.toString("base64") } }
-    : { type: "image", source: { type: "base64", media_type: finalMediaType, data: processedBuffer.toString("base64") } };
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: [
-          receiptContent,
-          {
-            type: "text",
-            text: `You are a receipt parser. Extract data from this receipt${isPdf ? " document" : " image"} and return ONLY a JSON object — no explanation, no markdown, no other text.
-
-JSON schema:
-{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
-
-Rules:
-- store_name and store_chain: read the store name/logo printed on the receipt header. Never infer from product brand names on the items. If you see "Target" anywhere on the receipt, store_name is "Target".
-- category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General
-- If an item is unclear, use your best estimate rather than skipping it
-- Output ONLY the JSON object, nothing else`,
-          },
-        ],
-      },
-    ],
+  const response = await fetch(`${serverUrl}/extract`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Key": apiKey,
+    },
+    body: JSON.stringify({
+      image: imageBuffer.toString("base64"),
+      content_type: contentType ?? "image/jpeg",
+    }),
+    signal: AbortSignal.timeout(120_000),
   });
 
-  const text = message.content[0]?.type === "text" ? message.content[0].text : "";
-  const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error(`Failed to parse OCR response: ${cleaned.substring(0, 200)}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Donut server responded ${response.status}: ${text}`);
   }
 
-  return validateOcrResult(parsed);
+  const data = await response.json();
+  return validateOcrResult(data);
 }
 
 async function streamToBuffer(stream) {
@@ -202,7 +128,6 @@ export const handler = async (event) => {
 
       if (receiptRes.rows.length === 0) {
         console.warn(`No receipt found for key ${key} after retries — creating one`);
-        // Extract userId from key pattern: receipts/{userId}/{uuid}.ext
         const parts = key.split("/");
         const userId = parts[1];
         if (!userId) {
@@ -243,7 +168,6 @@ export const handler = async (event) => {
 };
 
 async function insertItems(db, receiptId, userId, ocrResult) {
-  // Delete any existing items for this receipt (idempotent)
   await db.query(`DELETE FROM "ReceiptItem" WHERE "receiptId" = $1`, [receiptId]);
 
   for (const item of ocrResult.items) {
