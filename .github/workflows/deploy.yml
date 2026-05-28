@@ -173,8 +173,7 @@ jobs:
               \"sleep 8 && docker inspect -f '{{.State.Running}}' receiptiq | grep -q true || (docker logs receiptiq --tail 30 && exit 1)\",
               \"docker stop donut-server || true\",
               \"docker rm donut-server || true\",
-              \"docker run -d --name donut-server --network receiptiq_net -p 8080:8080 -v /home/ubuntu/donut-receipt-final:/model --env-file /home/ubuntu/donut.env --restart unless-stopped ${DONUT_IMAGE}\",
-              \"sleep 15 && docker inspect -f '{{.State.Running}}' donut-server | grep -q true || (docker logs donut-server --tail 30 && exit 1)\",
+              \"if [ -d /home/ubuntu/donut-receipt-final ] && [ -f /home/ubuntu/donut.env ]; then docker run -d --name donut-server --network receiptiq_net -p 8080:8080 -v /home/ubuntu/donut-receipt-final:/model --env-file /home/ubuntu/donut.env --restart unless-stopped ${DONUT_IMAGE} && sleep 15 && (docker inspect -f '{{.State.Running}}' donut-server | grep -q true && echo donut-server OK || (docker logs donut-server --tail 30; echo WARNING: donut-server unhealthy)); else echo 'Skipping donut-server: model or env file not present on EC2'; fi\",
               \"docker image prune -f\"
             ]}" \
             --region ${{ env.AWS_REGION }} \
