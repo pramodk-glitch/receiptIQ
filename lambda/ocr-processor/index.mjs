@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { TextractClient, AnalyzeExpenseCommand, StartExpenseAnalysisCommand, GetExpenseAnalysisCommand } from "@aws-sdk/client-textract";
+import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -103,38 +104,95 @@ function mapTextractToReceiptIQ(expense) {
   };
 }
 
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+function parsePdfText(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+  // Store name: first non-empty line, or look for known chains
+  const knownChains = ["target", "walmart", "costco", "kroger", "whole foods", "trader joe", "safeway", "cvs", "walgreens"];
+  let storeName = lines[0] || "Unknown Store";
+  for (const line of lines.slice(0, 10)) {
+    if (knownChains.some(c => line.toLowerCase().includes(c))) {
+      storeName = line;
+      break;
+    }
+  }
+
+  // Date: find MM/DD/YYYY or YYYY-MM-DD pattern
+  let receiptDate = new Date().toISOString().split("T")[0];
+  for (const line of lines) {
+    const m = line.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (m) {
+      const yr = m[3].length === 2 ? "20" + m[3] : m[3];
+      receiptDate = `${yr}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+      break;
+    }
+  }
+
+  // Total: last line matching TOTAL followed by a dollar amount
+  let total = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/total/i.test(lines[i])) {
+      const m = lines[i].match(/\$?\s*(\d+\.\d{2})/);
+      if (m) { total = parseFloat(m[1]); break; }
+      // Amount might be on the next line
+      if (i + 1 < lines.length) {
+        const m2 = lines[i + 1].match(/\$?\s*(\d+\.\d{2})/);
+        if (m2) { total = parseFloat(m2[1]); break; }
+      }
+    }
+  }
+
+  // Line items: lines where text is followed by a price (e.g. "Organic Milk  3.99")
+  const items = [];
+  const itemRe = /^(.+?)\s{2,}\$?\s*(\d+\.\d{2})\s*$/;
+  const skipWords = /^(subtotal|total|tax|change|cash|credit|debit|balance|savings|discount)/i;
+  for (const line of lines) {
+    if (skipWords.test(line)) continue;
+    const m = line.match(itemRe);
+    if (m) {
+      const name = m[1].trim();
+      const price = parseFloat(m[2]);
+      if (name.length > 1 && price > 0 && price < 10000) {
+        items.push({ item_name: name, quantity: 1, unit_price: price, line_total: price, category: "General" });
+      }
+    }
+  }
+
+  return {
+    store_name: storeName,
+    store_chain: storeName,
+    receipt_date: receiptDate,
+    total_amount: total,
+    currency: "USD",
+    items,
+  };
+}
+
 async function extractReceiptFromImage(bucket, key) {
   const isPdf = key.toLowerCase().endsWith(".pdf");
 
-  let expense;
   if (isPdf) {
-    // AnalyzeExpense sync API only supports single-page PDFs.
-    // Use async StartExpenseAnalysis + polling for multi-page PDFs.
-    const { JobId } = await textract.send(new StartExpenseAnalysisCommand({
-      DocumentLocation: { S3Object: { Bucket: bucket, Name: key } },
-    }));
-    console.log(`Textract async job started: ${JobId}`);
-
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const result = await textract.send(new GetExpenseAnalysisCommand({ JobId }));
-      console.log(`Job status: ${result.JobStatus}`);
-      if (result.JobStatus === "SUCCEEDED") {
-        expense = result.ExpenseDocuments?.[0];
-        break;
-      } else if (result.JobStatus === "FAILED") {
-        throw new Error(`Textract async job failed: ${result.StatusMessage}`);
-      }
-    }
-    if (!expense) throw new Error("Textract async job timed out or returned no documents");
-  } else {
-    const response = await textract.send(new AnalyzeExpenseCommand({
-      Document: { S3Object: { Bucket: bucket, Name: key } },
-    }));
-    expense = response.ExpenseDocuments?.[0];
-    if (!expense) throw new Error("Textract returned no expense documents");
+    // Textract cannot handle many app-generated PDFs — parse text directly instead
+    const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const pdfBytes = await streamToBuffer(s3Obj.Body);
+    const { text } = await pdfParse(pdfBytes);
+    console.log("PDF text extracted, length:", text.length);
+    if (!text || text.trim().length < 20) throw new Error("PDF appears to be image-based or empty — no extractable text");
+    return parsePdfText(text);
   }
 
+  // Images: use Textract AnalyzeExpense
+  const response = await textract.send(new AnalyzeExpenseCommand({
+    Document: { S3Object: { Bucket: bucket, Name: key } },
+  }));
+  const expense = response.ExpenseDocuments?.[0];
+  if (!expense) throw new Error("Textract returned no expense documents");
   return mapTextractToReceiptIQ(expense);
 }
 
