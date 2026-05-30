@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import pg from "pg";
 
@@ -9,6 +10,7 @@ const { Pool } = pg;
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 const textract = new TextractClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
 
@@ -174,17 +176,58 @@ function parsePdfText(text) {
   };
 }
 
+async function extractWithBedrock(pdfBytes) {
+  console.log("Falling back to Bedrock Claude for image-based PDF");
+  const body = JSON.stringify({
+    anthropic_version: "bedrock-2023-05-31",
+    max_tokens: 2048,
+    messages: [{
+      role: "user",
+      content: [
+        {
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: pdfBytes.toString("base64") },
+        },
+        {
+          type: "text",
+          text: `Extract all data from this receipt and return ONLY a JSON object, no markdown:
+{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
+category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`,
+        },
+      ],
+    }],
+  });
+
+  const response = await bedrock.send(new InvokeModelCommand({
+    modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    contentType: "application/json",
+    accept: "application/json",
+    body,
+  }));
+
+  const result = JSON.parse(Buffer.from(response.body).toString());
+  const text = result.content?.[0]?.text ?? "";
+  const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+  return JSON.parse(cleaned);
+}
+
 async function extractReceiptFromImage(bucket, key) {
   const isPdf = key.toLowerCase().endsWith(".pdf");
 
   if (isPdf) {
-    // Textract cannot handle many app-generated PDFs — parse text directly instead
     const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     const pdfBytes = await streamToBuffer(s3Obj.Body);
+
+    // Try text extraction first (fast, free)
     const { text } = await pdfParse(pdfBytes);
     console.log("PDF text extracted, length:", text.length);
-    if (!text || text.trim().length < 20) throw new Error("PDF appears to be image-based or empty — no extractable text");
-    return parsePdfText(text);
+
+    if (text && text.trim().length >= 20) {
+      return parsePdfText(text);
+    }
+
+    // Image-based PDF — use Bedrock Claude
+    return extractWithBedrock(pdfBytes);
   }
 
   // Images: use Textract AnalyzeExpense
