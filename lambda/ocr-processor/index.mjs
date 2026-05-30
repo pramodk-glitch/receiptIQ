@@ -1,11 +1,11 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
 import pg from "pg";
 
 const { Pool } = pg;
 
-const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const textract = new TextractClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
 
@@ -17,80 +17,99 @@ async function getSecret(secretName) {
 
 async function getDb() {
   if (dbPool) return dbPool;
-
   let connectionString = process.env.DATABASE_URL;
-
   if (!connectionString && process.env.DB_SECRET_ARN) {
     connectionString = await getSecret(process.env.DB_SECRET_ARN);
   }
-
   dbPool = new Pool({ connectionString, max: 1, idleTimeoutMillis: 10000, ssl: { rejectUnauthorized: false } });
   return dbPool;
 }
 
-function normalizeCategory(raw) {
-  const valid = ["Groceries", "Electronics", "Dining", "Medicine", "Household", "Personal Care", "Travel", "Entertainment", "General"];
-  if (!raw) return "General";
-  const found = valid.find((c) => c.toLowerCase() === raw.trim().toLowerCase());
-  return found ?? "General";
+function normalizeCategory() {
+  return "General";
 }
 
-function validateOcrResult(data) {
-  if (typeof data !== "object" || data === null) throw new Error("OCR result is not an object");
+function parseAmount(str) {
+  if (!str) return 0;
+  const cleaned = str.replace(/[^0-9.]/g, "");
+  const val = parseFloat(cleaned);
+  return isNaN(val) ? 0 : Math.round(val * 100) / 100;
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  const d = new Date(str.trim());
+  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  const m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    const yr = m[3].length === 2 ? "20" + m[3] : m[3];
+    return `${yr}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  }
+  return null;
+}
+
+function mapTextractToReceiptIQ(expense) {
+  const summaryFields = expense.SummaryFields ?? [];
+
+  const getField = (...types) => {
+    for (const type of types) {
+      const f = summaryFields.find(f => f.Type?.Text === type);
+      if (f?.ValueDetection?.Text) return f.ValueDetection.Text;
+    }
+    return "";
+  };
+
+  const storeName = getField("VENDOR_NAME", "NAME") || "Unknown Store";
+  const receiptDate = parseDate(getField("INVOICE_RECEIPT_DATE", "ORDER_DATE")) ?? new Date().toISOString().split("T")[0];
+  const total = parseAmount(getField("TOTAL", "AMOUNT_PAID", "SUBTOTAL"));
+
+  const items = [];
+  for (const group of expense.LineItemGroups ?? []) {
+    for (const lineItem of group.LineItems ?? []) {
+      const fields = lineItem.LineItemExpenseFields ?? [];
+      const getItemField = (...types) => {
+        for (const type of types) {
+          const f = fields.find(f => f.Type?.Text === type);
+          if (f?.ValueDetection?.Text) return f.ValueDetection.Text;
+        }
+        return "";
+      };
+
+      const itemName = getItemField("ITEM", "PRODUCT_CODE") || "Unknown Item";
+      const quantity = parseFloat(getItemField("QUANTITY")) || 1;
+      const lineTotal = parseAmount(getItemField("PRICE", "SUBTOTAL"));
+      const unitPriceRaw = getItemField("UNIT_PRICE");
+      const unitPrice = unitPriceRaw ? parseAmount(unitPriceRaw) : Math.round((lineTotal / quantity) * 100) / 100;
+
+      items.push({
+        item_name: itemName,
+        quantity,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        category: normalizeCategory(),
+      });
+    }
+  }
+
   return {
-    store_name: typeof data.store_name === "string" ? data.store_name : "Unknown Store",
-    store_chain: typeof data.store_chain === "string" ? data.store_chain : "",
-    receipt_date: typeof data.receipt_date === "string" ? data.receipt_date : new Date().toISOString().split("T")[0],
-    total_amount: typeof data.total_amount === "number" ? data.total_amount : 0,
-    currency: typeof data.currency === "string" ? data.currency : "USD",
-    items: Array.isArray(data.items)
-      ? data.items
-          .filter((i) => typeof i === "object" && i !== null)
-          .map((i) => ({
-            item_name: typeof i.item_name === "string" ? i.item_name : "Unknown Item",
-            quantity: typeof i.quantity === "number" ? i.quantity : 1,
-            unit_price: typeof i.unit_price === "number" ? i.unit_price : 0,
-            line_total: typeof i.line_total === "number" ? i.line_total : 0,
-            category: normalizeCategory(typeof i.category === "string" ? i.category : "General"),
-          }))
-      : [],
+    store_name: storeName,
+    store_chain: storeName,
+    receipt_date: receiptDate,
+    total_amount: total,
+    currency: "USD",
+    items,
   };
 }
 
-async function extractReceiptFromImage(imageBuffer, contentType) {
-  const serverUrl = process.env.DONUT_SERVER_URL;
-  if (!serverUrl) throw new Error("DONUT_SERVER_URL is not set");
+async function extractReceiptFromImage(bucket, key) {
+  const response = await textract.send(new AnalyzeExpenseCommand({
+    Document: { S3Object: { Bucket: bucket, Name: key } },
+  }));
 
-  const apiKey = process.env.DONUT_API_KEY ?? "";
+  const expense = response.ExpenseDocuments?.[0];
+  if (!expense) throw new Error("Textract returned no expense documents");
 
-  const response = await fetch(`${serverUrl}/extract`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Api-Key": apiKey,
-    },
-    body: JSON.stringify({
-      image: imageBuffer.toString("base64"),
-      content_type: contentType ?? "image/jpeg",
-    }),
-    signal: AbortSignal.timeout(120_000),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Donut server responded ${response.status}: ${text}`);
-  }
-
-  const data = await response.json();
-  return validateOcrResult(data);
-}
-
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
+  return mapTextractToReceiptIQ(expense);
 }
 
 export const handler = async (event) => {
@@ -103,18 +122,12 @@ export const handler = async (event) => {
     console.log(`Processing s3://${bucket}/${key}`);
 
     try {
-      const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-      const imageBuffer = await streamToBuffer(s3Obj.Body);
-      const contentType = s3Obj.ContentType ?? "image/jpeg";
-
-      const ocrResult = await extractReceiptFromImage(imageBuffer, contentType);
+      const ocrResult = await extractReceiptFromImage(bucket, key);
       console.log("OCR result:", JSON.stringify(ocrResult));
 
       const db = await getDb();
       const imageUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${key}`;
 
-      // Find the receipt record created when the presigned URL was used.
-      // Retry up to 5 times — Lambda fires before the app finishes POST /api/receipts.
       let receiptRes = { rows: [] };
       for (let attempt = 0; attempt < 5; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
@@ -130,10 +143,7 @@ export const handler = async (event) => {
         console.warn(`No receipt found for key ${key} after retries — creating one`);
         const parts = key.split("/");
         const userId = parts[1];
-        if (!userId) {
-          console.error("Cannot determine userId from key:", key);
-          continue;
-        }
+        if (!userId) { console.error("Cannot determine userId from key:", key); continue; }
 
         await db.query(
           `INSERT INTO "Receipt" (id, "userId", "storeName", "storeChain", "receiptDate", "totalAmount", currency, "imageUrl", "rawOcrText", source, "createdAt")
@@ -141,22 +151,15 @@ export const handler = async (event) => {
           [userId, ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, imageUrl, JSON.stringify(ocrResult)]
         );
 
-        const newReceipt = await db.query(
-          `SELECT id FROM "Receipt" WHERE "imageUrl" = $1 LIMIT 1`,
-          [imageUrl]
-        );
+        const newReceipt = await db.query(`SELECT id FROM "Receipt" WHERE "imageUrl" = $1 LIMIT 1`, [imageUrl]);
         if (newReceipt.rows.length === 0) continue;
-
-        const receiptId = newReceipt.rows[0].id;
-        await insertItems(db, receiptId, userId, ocrResult);
+        await insertItems(db, newReceipt.rows[0].id, userId, ocrResult);
       } else {
         const { id: receiptId, userId } = receiptRes.rows[0];
-
         await db.query(
           `UPDATE "Receipt" SET "storeName"=$1, "storeChain"=$2, "receiptDate"=$3, "totalAmount"=$4, currency=$5, "rawOcrText"=$6, "imageUrl"=$7 WHERE id=$8`,
           [ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, JSON.stringify(ocrResult), imageUrl, receiptId]
         );
-
         await insertItems(db, receiptId, userId, ocrResult);
       }
 

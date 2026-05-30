@@ -10,7 +10,6 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: receiptiq
-  DONUT_ECR_REPOSITORY: receiptiq-donut
   EC2_INSTANCE_ID: i-0379ced6f271d21f5
 
 jobs:
@@ -54,53 +53,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-donut-server:
-    name: Build & Push Donut Server
-    runs-on: ubuntu-latest
-
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tag }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Create ECR repository if absent
-        run: |
-          aws ecr describe-repositories --repository-names ${{ env.DONUT_ECR_REPOSITORY }} \
-            --region ${{ env.AWS_REGION }} 2>/dev/null || \
-          aws ecr create-repository --repository-name ${{ env.DONUT_ECR_REPOSITORY }} \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Set image tag
-        id: meta
-        run: echo "tag=${{ steps.login-ecr.outputs.registry }}/${{ env.DONUT_ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Donut server image
-        uses: docker/build-push-action@v5
-        with:
-          context: donut-server
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.tag }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.DONUT_ECR_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy-lambda:
     name: Deploy OCR Lambda
     runs-on: ubuntu-latest
@@ -121,7 +73,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Lambda dependencies (linux-x64 for Lambda runtime)
+      - name: Install Lambda dependencies
         working-directory: lambda/ocr-processor
         run: npm install
 
@@ -139,7 +91,7 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [build-and-push, build-donut-server]
+    needs: build-and-push
 
     steps:
       - name: Configure AWS credentials
@@ -156,7 +108,6 @@ jobs:
       - name: Deploy via SSM
         run: |
           IMAGE="${{ needs.build-and-push.outputs.image-tag }}"
-          DONUT_IMAGE="${{ needs.build-donut-server.outputs.image-tag }}"
           ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
 
           COMMAND_ID=$(aws ssm send-command \
@@ -165,15 +116,11 @@ jobs:
             --parameters "{\"commands\":[
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
               \"docker pull ${IMAGE}\",
-              \"docker pull ${DONUT_IMAGE}\",
               \"docker network create receiptiq_net 2>/dev/null || true\",
               \"docker stop receiptiq || true\",
               \"docker rm receiptiq || true\",
               \"docker run -d --name receiptiq --network receiptiq_net --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped ${IMAGE}\",
               \"sleep 8 && docker inspect -f '{{.State.Running}}' receiptiq | grep -q true || (docker logs receiptiq --tail 30 && exit 1)\",
-              \"docker stop donut-server || true\",
-              \"docker rm donut-server || true\",
-              \"if [ -d /home/ubuntu/donut-receipt-final ] && [ -f /home/ubuntu/donut.env ]; then docker run -d --name donut-server --network receiptiq_net -p 8080:8080 -v /home/ubuntu/donut-receipt-final:/model --env-file /home/ubuntu/donut.env --restart unless-stopped ${DONUT_IMAGE} && sleep 15 && (docker inspect -f '{{.State.Running}}' donut-server | grep -q true && echo donut-server OK || (docker logs donut-server --tail 30; echo WARNING: donut-server unhealthy)); else echo 'Skipping donut-server: model or env file not present on EC2'; fi\",
               \"docker image prune -f\"
             ]}" \
             --region ${{ env.AWS_REGION }} \
@@ -182,7 +129,6 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
-          # Wait for command to complete
           for i in {1..30}; do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
