@@ -114,7 +114,7 @@ jobs:
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "{\"commands\":[
-              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
+              \"/usr/local/bin/aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
               \"docker pull ${IMAGE}\",
               \"docker network create receiptiq_net 2>/dev/null || true\",
               \"docker stop receiptiq || true\",
