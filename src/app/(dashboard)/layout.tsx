@@ -16,13 +16,13 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="bg-white border-b border-slate-200">
+    <div className="min-h-screen bg-background">
+      <nav className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-8">
               <Link href="/dashboard" className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                   <svg
                     className="w-5 h-5 text-white"
                     fill="none"
@@ -37,43 +37,43 @@ export default async function DashboardLayout({
                     />
                   </svg>
                 </div>
-                <span className="font-semibold text-slate-900 text-lg">ReceiptIQ</span>
+                <span className="font-semibold text-foreground text-lg">ReceiptIQ</span>
               </Link>
 
               <div className="hidden md:flex items-center gap-6">
                 <Link
                   href="/dashboard"
-                  className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
                   Dashboard
                 </Link>
                 <Link
                   href="/receipts"
-                  className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
                   Receipts
                 </Link>
                 <Link
                   href="/receipts/upload"
-                  className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
                   Upload
                 </Link>
                 <Link
                   href="/import"
-                  className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
                   Import Amazon
                 </Link>
                 <Link
                   href="/manual-entry"
-                  className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
                   Manual Entry
                 </Link>
                 <Link
                   href="/price-compare"
-                  className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                  className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
                 >
                   Price Intel
                 </Link>
@@ -81,7 +81,7 @@ export default async function DashboardLayout({
             </div>
 
             <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-500 hidden sm:block">
+              <span className="text-sm text-muted-foreground hidden sm:block">
                 {session.user?.email}
               </span>
               <SignOutButton />
