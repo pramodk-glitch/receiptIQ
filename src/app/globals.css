@@ -4,40 +4,36 @@
 
 @layer base {
   :root {
-    /* ReceiptIQ dark navy theme — matches app mockup */
-    --background:   240 33% 7%;       /* #0c0c18 */
-    --foreground:   240 23% 90%;      /* #ddddf0 */
+    /* 🌊 ReceiptIQ — Deep Navy / Teal */
+    --background:   220 55% 6%;       /* #060d1a deep navy */
+    --foreground:   210 40% 92%;      /* #e0eaf4 soft white */
 
-    --card:         240 35% 12%;      /* #14142a */
-    --card-foreground: 240 23% 90%;
+    --card:         216 52% 11%;      /* #0d1a2e navy card */
+    --card-foreground: 210 40% 92%;
 
-    --popover:      240 35% 12%;
-    --popover-foreground: 240 23% 90%;
+    --popover:      216 52% 11%;
+    --popover-foreground: 210 40% 92%;
 
-    --primary:      243 75% 59%;      /* #6366f1 indigo */
+    --primary:      173 80% 40%;      /* #14b8a6 teal-500 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary:    240 28% 20%;      /* #242440 */
-    --secondary-foreground: 240 23% 90%;
+    --secondary:    212 46% 17%;      /* #182d42 navy secondary */
+    --secondary-foreground: 210 40% 92%;
 
-    --muted:        240 30% 15%;      /* #1a1a30 */
-    --muted-foreground: 240 14% 38%;  /* #555570 */
+    --muted:        214 50% 13%;      /* #0f1e32 deep muted */
+    --muted-foreground: 213 22% 44%;  /* #546a82 */
 
-    --accent:       262 89% 76%;      /* #a78bfa violet */
-    --accent-foreground: 0 0% 100%;
+    --accent:       174 66% 50%;      /* #2dd4bf teal-400 */
+    --accent-foreground: 220 55% 6%;
 
-    --destructive:  0 84% 60%;        /* #ef4444 */
+    --destructive:  0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:       240 28% 20%;      /* #242440 */
-    --input:        240 28% 20%;
-    --ring:         243 75% 59%;
+    --border:       212 42% 18%;      /* #1a2d45 */
+    --input:        212 42% 18%;
+    --ring:         173 80% 40%;
 
     --radius: 0.75rem;
-
-    /* Semantic extras */
-    --success:      161 84% 40%;      /* #10b981 */
-    --warning:      38 92% 50%;       /* #f59e0b */
   }
 }
 
@@ -51,9 +47,8 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Custom scrollbar to match dark theme */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: hsl(var(--background)); }
   ::-webkit-scrollbar-thumb { background: hsl(var(--secondary)); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.6); }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }
 }
