@@ -199,7 +199,7 @@ category must be one of: Groceries, Electronics, Dining, Medicine, Household, Pe
   });
 
   const response = await bedrock.send(new InvokeModelCommand({
-    modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    modelId: "anthropic.claude-3-5-haiku-20241022-v1:0",
     contentType: "application/json",
     accept: "application/json",
     body,
