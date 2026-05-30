@@ -4,36 +4,36 @@
 
 @layer base {
   :root {
-    /* 🌊 ReceiptIQ — Deep Navy / Teal */
-    --background:   220 55% 6%;       /* #060d1a deep navy */
-    --foreground:   210 40% 92%;      /* #e0eaf4 soft white */
+    /* ✨ ReceiptIQ — Light & Clean Fintech */
+    --background:   220 33% 97%;      /* #f5f7fc near-white with blue tint */
+    --foreground:   222 47% 11%;      /* #0f172a near-black */
 
-    --card:         216 52% 11%;      /* #0d1a2e navy card */
-    --card-foreground: 210 40% 92%;
+    --card:         0 0% 100%;        /* #ffffff pure white */
+    --card-foreground: 222 47% 11%;
 
-    --popover:      216 52% 11%;
-    --popover-foreground: 210 40% 92%;
+    --popover:      0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary:      173 80% 40%;      /* #14b8a6 teal-500 */
+    --primary:      224 83% 53%;      /* #2563eb blue-600 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary:    212 46% 17%;      /* #182d42 navy secondary */
-    --secondary-foreground: 210 40% 92%;
+    --secondary:    213 27% 94%;      /* #edf1f7 light slate */
+    --secondary-foreground: 222 47% 11%;
 
-    --muted:        214 50% 13%;      /* #0f1e32 deep muted */
-    --muted-foreground: 213 22% 44%;  /* #546a82 */
+    --muted:        214 24% 96%;      /* #f1f5f9 slate-100 */
+    --muted-foreground: 215 16% 47%;  /* #64748b slate-500 */
 
-    --accent:       174 66% 50%;      /* #2dd4bf teal-400 */
-    --accent-foreground: 220 55% 6%;
+    --accent:       199 89% 49%;      /* #0ea5e9 sky-500 */
+    --accent-foreground: 0 0% 100%;
 
     --destructive:  0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:       212 42% 18%;      /* #1a2d45 */
-    --input:        212 42% 18%;
-    --ring:         173 80% 40%;
+    --border:       214 32% 91%;      /* #e2e8f0 slate-200 */
+    --input:        214 32% 91%;
+    --ring:         224 83% 53%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;
   }
 }
 
@@ -47,8 +47,13 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* Cards get a subtle shadow instead of heavy borders */
+  .card, [class*="rounded"] {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: hsl(var(--background)); }
-  ::-webkit-scrollbar-thumb { background: hsl(var(--secondary)); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.3); }
 }
