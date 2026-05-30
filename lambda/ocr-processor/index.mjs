@@ -1,6 +1,6 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
+import { TextractClient, AnalyzeExpenseCommand, StartExpenseAnalysisCommand, GetExpenseAnalysisCommand } from "@aws-sdk/client-textract";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -103,28 +103,37 @@ function mapTextractToReceiptIQ(expense) {
   };
 }
 
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
-
 async function extractReceiptFromImage(bucket, key) {
   const isPdf = key.toLowerCase().endsWith(".pdf");
 
-  // Textract synchronous AnalyzeExpense only accepts PDFs as raw Bytes, not S3Object
-  let document;
+  let expense;
   if (isPdf) {
-    const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const bytes = await streamToBuffer(s3Obj.Body);
-    document = { Bytes: bytes };
-  } else {
-    document = { S3Object: { Bucket: bucket, Name: key } };
-  }
+    // AnalyzeExpense sync API only supports single-page PDFs.
+    // Use async StartExpenseAnalysis + polling for multi-page PDFs.
+    const { JobId } = await textract.send(new StartExpenseAnalysisCommand({
+      DocumentLocation: { S3Object: { Bucket: bucket, Name: key } },
+    }));
+    console.log(`Textract async job started: ${JobId}`);
 
-  const response = await textract.send(new AnalyzeExpenseCommand({ Document: document }));
-  const expense = response.ExpenseDocuments?.[0];
-  if (!expense) throw new Error("Textract returned no expense documents");
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const result = await textract.send(new GetExpenseAnalysisCommand({ JobId }));
+      console.log(`Job status: ${result.JobStatus}`);
+      if (result.JobStatus === "SUCCEEDED") {
+        expense = result.ExpenseDocuments?.[0];
+        break;
+      } else if (result.JobStatus === "FAILED") {
+        throw new Error(`Textract async job failed: ${result.StatusMessage}`);
+      }
+    }
+    if (!expense) throw new Error("Textract async job timed out or returned no documents");
+  } else {
+    const response = await textract.send(new AnalyzeExpenseCommand({
+      Document: { S3Object: { Bucket: bucket, Name: key } },
+    }));
+    expense = response.ExpenseDocuments?.[0];
+    if (!expense) throw new Error("Textract returned no expense documents");
+  }
 
   return mapTextractToReceiptIQ(expense);
 }
