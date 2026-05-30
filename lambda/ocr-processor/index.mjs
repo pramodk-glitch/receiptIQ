@@ -1,9 +1,11 @@
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
 import pg from "pg";
 
 const { Pool } = pg;
 
+const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 const textract = new TextractClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
@@ -101,11 +103,26 @@ function mapTextractToReceiptIQ(expense) {
   };
 }
 
-async function extractReceiptFromImage(bucket, key) {
-  const response = await textract.send(new AnalyzeExpenseCommand({
-    Document: { S3Object: { Bucket: bucket, Name: key } },
-  }));
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
 
+async function extractReceiptFromImage(bucket, key) {
+  const isPdf = key.toLowerCase().endsWith(".pdf");
+
+  // Textract synchronous AnalyzeExpense only accepts PDFs as raw Bytes, not S3Object
+  let document;
+  if (isPdf) {
+    const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const bytes = await streamToBuffer(s3Obj.Body);
+    document = { Bytes: bytes };
+  } else {
+    document = { S3Object: { Bucket: bucket, Name: key } };
+  }
+
+  const response = await textract.send(new AnalyzeExpenseCommand({ Document: document }));
   const expense = response.ExpenseDocuments?.[0];
   if (!expense) throw new Error("Textract returned no expense documents");
 
