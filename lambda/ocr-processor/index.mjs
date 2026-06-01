@@ -1,6 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import pg from "pg";
@@ -9,10 +8,10 @@ const { Pool } = pg;
 
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
-const textract = new TextractClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
+let cachedAnthropicKey = null;
 
 async function getSecret(secretName) {
   const cmd = new GetSecretValueCommand({ SecretId: secretName });
@@ -53,57 +52,75 @@ function parseDate(str) {
   return null;
 }
 
-function mapTextractToReceiptIQ(expense) {
-  const summaryFields = expense.SummaryFields ?? [];
+function getImageMediaType(key) {
+  const ext = key.toLowerCase().split(".").pop();
+  const map = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+  return map[ext] ?? "image/jpeg";
+}
 
-  const getField = (...types) => {
-    for (const type of types) {
-      const f = summaryFields.find(f => f.Type?.Text === type);
-      if (f?.ValueDetection?.Text) return f.ValueDetection.Text;
+async function getAnthropicApiKey() {
+  if (cachedAnthropicKey) return cachedAnthropicKey;
+  if (process.env.ANTHROPIC_API_KEY) {
+    cachedAnthropicKey = process.env.ANTHROPIC_API_KEY;
+    return cachedAnthropicKey;
+  }
+  if (process.env.ANTHROPIC_SECRET_ARN) {
+    const secret = await getSecret(process.env.ANTHROPIC_SECRET_ARN);
+    try {
+      const parsed = JSON.parse(secret);
+      cachedAnthropicKey = parsed.ANTHROPIC_API_KEY ?? secret;
+    } catch {
+      cachedAnthropicKey = secret;
     }
-    return "";
-  };
+    return cachedAnthropicKey;
+  }
+  throw new Error("No Anthropic API key configured (set ANTHROPIC_API_KEY or ANTHROPIC_SECRET_ARN)");
+}
 
-  const storeName = getField("VENDOR_NAME", "NAME") || "Unknown Store";
-  const receiptDate = parseDate(getField("INVOICE_RECEIPT_DATE", "ORDER_DATE")) ?? new Date().toISOString().split("T")[0];
-  const total = parseAmount(getField("TOTAL", "AMOUNT_PAID", "SUBTOTAL"));
+async function extractWithAnthropic(imageBuffer, mediaType) {
+  const apiKey = await getAnthropicApiKey();
 
-  const items = [];
-  for (const group of expense.LineItemGroups ?? []) {
-    for (const lineItem of group.LineItems ?? []) {
-      const fields = lineItem.LineItemExpenseFields ?? [];
-      const getItemField = (...types) => {
-        for (const type of types) {
-          const f = fields.find(f => f.Type?.Text === type);
-          if (f?.ValueDetection?.Text) return f.ValueDetection.Text;
-        }
-        return "";
-      };
+  const base64 = imageBuffer.toString("base64");
 
-      const itemName = getItemField("ITEM", "PRODUCT_CODE") || "Unknown Item";
-      const quantity = parseFloat(getItemField("QUANTITY")) || 1;
-      const lineTotal = parseAmount(getItemField("PRICE", "SUBTOTAL"));
-      const unitPriceRaw = getItemField("UNIT_PRICE");
-      const unitPrice = unitPriceRaw ? parseAmount(unitPriceRaw) : Math.round((lineTotal / quantity) * 100) / 100;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      messages: [{
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: mediaType, data: base64 },
+          },
+          {
+            type: "text",
+            text: `Extract all data from this receipt image and return ONLY a JSON object — no markdown, no explanation, no extra text. Look carefully at the actual text visible in the image; do not guess or invent store names or items.
 
-      items.push({
-        item_name: itemName,
-        quantity,
-        unit_price: unitPrice,
-        line_total: lineTotal,
-        category: normalizeCategory(),
-      });
-    }
+{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
+
+category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`,
+          },
+        ],
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic API error ${response.status}: ${errorText}`);
   }
 
-  return {
-    store_name: storeName,
-    store_chain: storeName,
-    receipt_date: receiptDate,
-    total_amount: total,
-    currency: "USD",
-    items,
-  };
+  const result = await response.json();
+  const text = result.content?.[0]?.text ?? "";
+  const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+  return JSON.parse(cleaned);
 }
 
 async function streamToBuffer(stream) {
@@ -230,13 +247,12 @@ async function extractReceiptFromImage(bucket, key) {
     return extractWithBedrock(pdfBytes);
   }
 
-  // Images: use Textract AnalyzeExpense
-  const response = await textract.send(new AnalyzeExpenseCommand({
-    Document: { S3Object: { Bucket: bucket, Name: key } },
-  }));
-  const expense = response.ExpenseDocuments?.[0];
-  if (!expense) throw new Error("Textract returned no expense documents");
-  return mapTextractToReceiptIQ(expense);
+  // Images: use Anthropic Claude vision
+  console.log("Using Anthropic API for image OCR:", key);
+  const s3Img = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const imageBuffer = await streamToBuffer(s3Img.Body);
+  const mediaType = getImageMediaType(key);
+  return extractWithAnthropic(imageBuffer, mediaType);
 }
 
 export const handler = async (event) => {

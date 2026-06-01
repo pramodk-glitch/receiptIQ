@@ -88,6 +88,7 @@ jobs:
             --zip-file fileb://lambda.zip \
             --region ${{ env.AWS_REGION }}
 
+
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
