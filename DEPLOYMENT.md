@@ -30,6 +30,14 @@ Workflow: `.github/workflows/docker-build-push.yml`
 ### Optional secrets
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SECRETS_MANAGER_SECRET_NAME`
+- `AWS_REGION` (defaults to `us-east-1`)
+
+### AWS Secrets Manager support
+
+If your Anthropic API key is stored in AWS Secrets Manager, set the optional AWS secrets above and the workflows will retrieve `ANTHROPIC_API_KEY` at runtime from Secrets Manager. The value may be stored as either a plain string or a JSON object with `ANTHROPIC_API_KEY` as a key.
 
 ### Output
 - Pushes image to GitHub Container Registry under `ghcr.io/<owner>/receiptiq:latest`

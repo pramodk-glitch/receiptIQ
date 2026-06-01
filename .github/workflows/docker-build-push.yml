@@ -22,16 +22,39 @@ jobs:
         with:
           node-version: 18
 
+      - name: Configure AWS credentials
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_SECRETS_MANAGER_SECRET_NAME != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Retrieve Anthropic API key from AWS Secrets Manager
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_SECRETS_MANAGER_SECRET_NAME != '' }}
+        run: |
+          SECRET=$(aws secretsmanager get-secret-value --secret-id "${{ secrets.AWS_SECRETS_MANAGER_SECRET_NAME }}" --query SecretString --output text)
+          if python -c 'import json,sys; json.loads(sys.stdin.read())' <<< "$SECRET" >/dev/null 2>&1; then
+            SECRET_VALUE=$(python -c 'import json,sys; data=json.load(sys.stdin); print(data.get("ANTHROPIC_API_KEY",""))' <<< "$SECRET" 2>/dev/null)
+            if [ -n "$SECRET_VALUE" ]; then
+              echo "ANTHROPIC_API_KEY=$SECRET_VALUE" >> $GITHUB_ENV
+            else
+              echo "ANTHROPIC_API_KEY=$SECRET" >> $GITHUB_ENV
+            fi
+          else
+            echo "ANTHROPIC_API_KEY=$SECRET" >> $GITHUB_ENV
+          fi
+
       - name: Install dependencies
         run: npm ci
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY != '' && env.ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
           USE_LEGACY_ANTHROPIC_API: ${{ secrets.USE_LEGACY_ANTHROPIC_API }}
 
       - name: Build (Next.js)
         run: npm run build
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY != '' && env.ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
           USE_LEGACY_ANTHROPIC_API: ${{ secrets.USE_LEGACY_ANTHROPIC_API }}
 
       - name: Set up QEMU
@@ -57,7 +80,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/receiptiq:latest
             ghcr.io/${{ github.repository_owner }}/receiptiq:${{ github.sha }}
           build-args: |
-            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            ANTHROPIC_API_KEY=${{ env.ANTHROPIC_API_KEY != '' && env.ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
             USE_LEGACY_ANTHROPIC_API=${{ secrets.USE_LEGACY_ANTHROPIC_API }}
 
       - name: Login to Docker Hub
@@ -79,5 +102,5 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptiq:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptiq:${{ github.sha }}
           build-args: |
-            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            ANTHROPIC_API_KEY=${{ env.ANTHROPIC_API_KEY != '' && env.ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
             USE_LEGACY_ANTHROPIC_API=${{ secrets.USE_LEGACY_ANTHROPIC_API }}

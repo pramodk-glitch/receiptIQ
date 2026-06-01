@@ -12,7 +12,7 @@ This repo includes two GitHub Actions workflows for deployment:
 ### Required secrets
 
 - `VERCEL_TOKEN`
-- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_API_KEY` — required unless using AWS Secrets Manager.
 - `USE_LEGACY_ANTHROPIC_API` (set to `1` for the legacy Anthropic OCR endpoint)
 
 ### Optional secrets
@@ -21,6 +21,10 @@ This repo includes two GitHub Actions workflows for deployment:
 - `VERCEL_PROJECT_ID`
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SECRETS_MANAGER_SECRET_NAME`
+- `AWS_REGION` (defaults to `us-east-1`)
 
 ### Quick local build
 
