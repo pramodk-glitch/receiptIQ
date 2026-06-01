@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Toaster } from "@/components/ui/toaster";
+import NavMenu from "@/components/NavMenu";
 
 export default async function DashboardLayout({
   children,
@@ -77,6 +78,9 @@ export default async function DashboardLayout({
                 >
                   Price Intel
                 </Link>
+              </div>
+              <div className="md:hidden">
+                <NavMenu />
               </div>
             </div>
 

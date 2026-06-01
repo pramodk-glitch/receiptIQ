@@ -4,6 +4,8 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const USE_LEGACY = process.env.USE_LEGACY_ANTHROPIC_API === "1";
+
 export interface OcrLineItem {
   item_name: string;
   quantity: number;
@@ -81,6 +83,37 @@ export async function extractReceiptFromImage(
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
 ): Promise<OcrResult> {
   const base64Image = imageBuffer.toString("base64");
+  // If requested, use the legacy REST-style Anthropi endpoint as a fallback
+  if (USE_LEGACY) {
+    const prompt = `Extract all line items from this receipt image. The image is provided as a data URI below.\nDATA_URI: data:${mediaType};base64,${base64Image}\nReturn JSON exactly in this shape (no additional text):\n{\n  "store_name": string,\n  "store_chain": string,\n  "receipt_date": "YYYY-MM-DD",\n  "total_amount": number,\n  "currency": "USD",\n  "items": [\n    {\n      "item_name": string,\n      "quantity": number,\n      "unit_price": number,\n      "line_total": number,\n      "category": string\n    }\n  ]\n}\nFor category, use only one of: Groceries | Electronics | Dining | Medicine | Household | Personal Care | Travel | Entertainment | General\nReturn only valid JSON, no markdown, no explanation.`;
+
+    const res = await fetch("https://api.anthropic.com/v1/complete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+      },
+      body: JSON.stringify({ model: "claude-1", prompt, max_tokens: 2000, temperature: 0 }),
+    });
+
+    const json = await res.json();
+    const responseText = json.completion ?? json.choices?.[0]?.text ?? "";
+
+    const cleanedText = responseText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```\s*$/i, "")
+      .trim();
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleanedText);
+    } catch (err) {
+      throw new Error(`Failed to parse OCR response as JSON (legacy): ${cleanedText.substring(0, 200)}`);
+    }
+
+    return validateOcrResult(parsed);
+  }
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -99,27 +132,7 @@ export async function extractReceiptFromImage(
           },
           {
             type: "text",
-            text: `Extract all line items from this receipt image. Return JSON:
-{
-  "store_name": string,
-  "store_chain": string,
-  "receipt_date": "YYYY-MM-DD",
-  "total_amount": number,
-  "currency": "USD",
-  "items": [
-    {
-      "item_name": string,
-      "quantity": number,
-      "unit_price": number,
-      "line_total": number,
-      "category": string
-    }
-  ]
-}
-
-For category, use only one of: Groceries | Electronics | Dining | Medicine | Household | Personal Care | Travel | Entertainment | General
-
-Return only valid JSON, no markdown, no explanation.`,
+            text: `Extract all line items from this receipt image. Return JSON:\n{\n  "store_name": string,\n  "store_chain": string,\n  "receipt_date": "YYYY-MM-DD",\n  "total_amount": number,\n  "currency": "USD",\n  "items": [\n    {\n      "item_name": string,\n      "quantity": number,\n      "unit_price": number,\n      "line_total": number,\n      "category": string\n    }\n  ]\n}\n\nFor category, use only one of: Groceries | Electronics | Dining | Medicine | Household | Personal Care | Travel | Entertainment | General\n\nReturn only valid JSON, no markdown, no explanation.`,
           },
         ],
       },
