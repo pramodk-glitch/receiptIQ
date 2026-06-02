@@ -75,11 +75,20 @@ jobs:
 
       - name: Install Lambda dependencies
         working-directory: lambda/ocr-processor
-        run: npm install
+        run: npm ci --omit=dev
 
       - name: Package Lambda
         working-directory: lambda/ocr-processor
-        run: zip -r ../../lambda.zip .
+        run: |
+          zip -r ../../lambda.zip . \
+            --exclude "*.git*" \
+            --exclude "node_modules/.cache/*" \
+            --exclude "node_modules/*/test/*" \
+            --exclude "node_modules/*/tests/*" \
+            --exclude "node_modules/*/*.md" \
+            --exclude "node_modules/*/CHANGELOG*" \
+            --exclude "node_modules/*/README*"
+          echo "Lambda zip size: $(du -sh ../../lambda.zip | cut -f1)"
 
       - name: Deploy Lambda
         run: |
