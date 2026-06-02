@@ -156,7 +156,8 @@ export async function extractReceiptFromImage(
 export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResult> {
   const base64Pdf = pdfBuffer.toString("base64");
 
-  const message = await anthropic.messages.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const message = await (anthropic.messages.create as any)({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
     messages: [
@@ -170,7 +171,7 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
               media_type: "application/pdf",
               data: base64Pdf,
             },
-          } as Parameters<typeof anthropic.messages.create>[0]["messages"][0]["content"][0],
+          },
           {
             type: "text",
             text: RECEIPT_PROMPT,
