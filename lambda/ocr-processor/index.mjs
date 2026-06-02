@@ -11,7 +11,6 @@ const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
-let cachedAnthropicKey = null;
 
 async function getSecret(secretName) {
   const cmd = new GetSecretValueCommand({ SecretId: secretName });
@@ -58,27 +57,9 @@ function getImageMediaType(key) {
   return map[ext] ?? "image/jpeg";
 }
 
-async function getAnthropicApiKey() {
-  if (cachedAnthropicKey) return cachedAnthropicKey;
-  if (process.env.ANTHROPIC_API_KEY) {
-    cachedAnthropicKey = process.env.ANTHROPIC_API_KEY;
-    return cachedAnthropicKey;
-  }
-  if (process.env.ANTHROPIC_SECRET_ARN) {
-    const secret = await getSecret(process.env.ANTHROPIC_SECRET_ARN);
-    try {
-      const parsed = JSON.parse(secret);
-      cachedAnthropicKey = parsed.ANTHROPIC_API_KEY ?? secret;
-    } catch {
-      cachedAnthropicKey = secret;
-    }
-    return cachedAnthropicKey;
-  }
-  throw new Error("No Anthropic API key configured (set ANTHROPIC_API_KEY or ANTHROPIC_SECRET_ARN)");
-}
-
 async function extractWithAnthropic(imageBuffer, mediaType) {
-  const apiKey = await getAnthropicApiKey();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set in Lambda environment variables");
 
   const base64 = imageBuffer.toString("base64");
 
