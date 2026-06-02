@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       source = "manual",
       items = [],
       contentHashInput,
+      rawOcrText,
     } = body;
 
     if (!storeName || !receiptDate || totalAmount === undefined) {
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
           imageUrl: imageUrl ? String(imageUrl) : s3Key ? String(s3Key) : null,
           source: String(source),
           contentHash,
+          rawOcrText: rawOcrText ? String(rawOcrText) : null,
         },
       });
 

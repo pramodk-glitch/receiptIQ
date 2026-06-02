@@ -171,6 +171,7 @@ export function ReceiptUpload() {
           s3Key,
           source: "upload",
           contentHashInput: contentHash,
+          rawOcrText: ocrData ? JSON.stringify(ocrData) : null,
           items: ocrData?.items?.map((item) => ({
             itemName: item.item_name,
             quantity: item.quantity,

@@ -256,7 +256,7 @@ export const handler = async (event) => {
       for (let attempt = 0; attempt < 5; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
         receiptRes = await db.query(
-          `SELECT id, "userId", "storeName", "totalAmount" FROM "Receipt" WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
+          `SELECT id, "userId" FROM "Receipt" WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
           [imageUrl]
         );
         if (receiptRes.rows.length > 0) break;
@@ -279,11 +279,16 @@ export const handler = async (event) => {
         if (newReceipt.rows.length === 0) continue;
         await insertItems(db, newReceipt.rows[0].id, userId, ocrResult);
       } else {
-        const { id: receiptId, userId, storeName: existingName, totalAmount: existingTotal } = receiptRes.rows[0];
+        const { id: receiptId, userId } = receiptRes.rows[0];
 
-        // Skip if the API route already saved real OCR data — don't overwrite with Lambda results
-        if (existingName && existingName !== "Processing..." && existingTotal > 0) {
-          console.log(`Receipt ${receiptId} already has OCR data from API route, skipping Lambda update`);
+        // Re-check rawOcrText right before writing — the API route OCR may have
+        // finished while the Lambda was running its own OCR above.
+        const freshCheck = await db.query(
+          `SELECT "rawOcrText" FROM "Receipt" WHERE id = $1`,
+          [receiptId]
+        );
+        if (freshCheck.rows[0]?.rawOcrText != null) {
+          console.log(`Receipt ${receiptId} already processed by API route, skipping Lambda update`);
           continue;
         }
 
