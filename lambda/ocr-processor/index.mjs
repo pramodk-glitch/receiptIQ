@@ -256,7 +256,7 @@ export const handler = async (event) => {
       for (let attempt = 0; attempt < 5; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
         receiptRes = await db.query(
-          `SELECT id, "userId" FROM "Receipt" WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
+          `SELECT id, "userId", "storeName", "totalAmount" FROM "Receipt" WHERE "imageUrl" = $1 AND source = 'upload' LIMIT 1`,
           [imageUrl]
         );
         if (receiptRes.rows.length > 0) break;
@@ -279,7 +279,14 @@ export const handler = async (event) => {
         if (newReceipt.rows.length === 0) continue;
         await insertItems(db, newReceipt.rows[0].id, userId, ocrResult);
       } else {
-        const { id: receiptId, userId } = receiptRes.rows[0];
+        const { id: receiptId, userId, storeName: existingName, totalAmount: existingTotal } = receiptRes.rows[0];
+
+        // Skip if the API route already saved real OCR data — don't overwrite with Lambda results
+        if (existingName && existingName !== "Processing..." && existingTotal > 0) {
+          console.log(`Receipt ${receiptId} already has OCR data from API route, skipping Lambda update`);
+          continue;
+        }
+
         await db.query(
           `UPDATE "Receipt" SET "storeName"=$1, "storeChain"=$2, "receiptDate"=$3, "totalAmount"=$4, currency=$5, "rawOcrText"=$6, "imageUrl"=$7 WHERE id=$8`,
           [ocrResult.store_name, ocrResult.store_chain, ocrResult.receipt_date, ocrResult.total_amount, ocrResult.currency, JSON.stringify(ocrResult), imageUrl, receiptId]
