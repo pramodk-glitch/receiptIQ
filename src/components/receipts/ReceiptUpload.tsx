@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 
-type UploadState = "idle" | "reading" | "presigning" | "uploading" | "saving" | "done" | "error";
+type UploadState = "idle" | "reading" | "presigning" | "uploading" | "analyzing" | "saving" | "done" | "error";
 
 export function ReceiptUpload() {
   const router = useRouter();
@@ -114,20 +114,59 @@ export function ReceiptUpload() {
         throw new Error("Failed to upload file to storage");
       }
 
+      // Run OCR directly — no Lambda dependency
+      setUploadState("analyzing");
+      setProgress(70);
+
+      type OcrResult = {
+        store_name: string;
+        store_chain: string;
+        receipt_date: string;
+        total_amount: number;
+        currency: string;
+        items: { item_name: string; quantity: number; unit_price: number; line_total: number; category: string }[];
+      };
+      let ocrData: OcrResult | null = null;
+
+      if (selectedFile.type !== "application/pdf" && preview) {
+        try {
+          const base64 = preview.split(",")[1];
+          const ocrRes = await fetch("/api/ocr", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: base64, mediaType: selectedFile.type }),
+          });
+          if (ocrRes.ok) {
+            ocrData = await ocrRes.json();
+          }
+        } catch {
+          // OCR failed — receipt will be saved with placeholder values
+        }
+      }
+
       setUploadState("saving");
-      setProgress(80);
+      setProgress(85);
 
       const saveRes = await fetch("/api/receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          storeName: "Processing...",
-          receiptDate: new Date().toISOString(),
-          totalAmount: 0,
+          storeName: ocrData?.store_name ?? "Processing...",
+          storeChain: ocrData?.store_chain ?? null,
+          receiptDate: ocrData?.receipt_date ?? new Date().toISOString(),
+          totalAmount: ocrData?.total_amount ?? 0,
+          currency: ocrData?.currency ?? "USD",
           imageUrl,
           s3Key,
           source: "upload",
           contentHashInput: contentHash,
+          items: ocrData?.items?.map((item) => ({
+            itemName: item.item_name,
+            quantity: item.quantity,
+            unitPrice: item.unit_price,
+            lineTotal: item.line_total,
+            category: item.category,
+          })) ?? [],
         }),
       });
 
@@ -176,6 +215,7 @@ export function ReceiptUpload() {
     reading: "Reading file...",
     presigning: "Preparing upload...",
     uploading: "Uploading to storage...",
+    analyzing: "Reading receipt with AI...",
     saving: "Saving receipt...",
     done: "Done!",
     error: "",
