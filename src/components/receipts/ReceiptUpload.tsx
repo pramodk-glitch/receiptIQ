@@ -128,20 +128,31 @@ export function ReceiptUpload() {
       };
       let ocrData: OcrResult | null = null;
 
-      if (selectedFile.type !== "application/pdf" && preview) {
-        try {
-          const base64 = preview.split(",")[1];
-          const ocrRes = await fetch("/api/ocr", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageBase64: base64, mediaType: selectedFile.type }),
-          });
-          if (ocrRes.ok) {
-            ocrData = await ocrRes.json();
-          }
-        } catch {
-          // OCR failed — receipt will be saved with placeholder values
+      try {
+        // For images use the already-loaded preview DataURL; for PDFs read the file now
+        let base64: string;
+        if (selectedFile.type === "application/pdf") {
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          base64 = btoa(binary);
+        } else if (preview) {
+          base64 = preview.split(",")[1];
+        } else {
+          throw new Error("No file data available");
         }
+
+        const ocrRes = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mediaType: selectedFile.type }),
+        });
+        if (ocrRes.ok) {
+          ocrData = await ocrRes.json();
+        }
+      } catch {
+        // OCR failed — receipt will be saved with placeholder values
       }
 
       setUploadState("saving");

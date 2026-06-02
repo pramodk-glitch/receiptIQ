@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { extractReceiptFromImage, getMediaType } from "@/lib/claude";
+import { extractReceiptFromImage, extractReceiptFromPdf, getMediaType } from "@/lib/claude";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -18,9 +18,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validType = getMediaType(mediaType);
-    const imageBuffer = Buffer.from(imageBase64, "base64");
-    const result = await extractReceiptFromImage(imageBuffer, validType);
+    const buffer = Buffer.from(imageBase64, "base64");
+
+    const result =
+      mediaType === "application/pdf"
+        ? await extractReceiptFromPdf(buffer)
+        : await extractReceiptFromImage(buffer, getMediaType(mediaType));
 
     return NextResponse.json(result);
   } catch (err) {
