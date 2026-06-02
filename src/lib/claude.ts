@@ -154,36 +154,45 @@ export async function extractReceiptFromImage(
 }
 
 export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+
   const base64Pdf = pdfBuffer.toString("base64");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const message = await (anthropic.messages.create as any)({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [
-      {
+  // Use fetch directly — SDK v0.27 silently drops document blocks,
+  // causing Claude to receive no content and hallucinate a receipt.
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "pdfs-2024-09-25",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      messages: [{
         role: "user",
         content: [
           {
             type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: base64Pdf,
-            },
+            source: { type: "base64", media_type: "application/pdf", data: base64Pdf },
           },
-          {
-            type: "text",
-            text: RECEIPT_PROMPT,
-          },
+          { type: "text", text: RECEIPT_PROMPT },
         ],
-      },
-    ],
+      }],
+    }),
   });
 
-  const responseText =
-    message.content[0].type === "text" ? message.content[0].text : "";
-  return parseClaudeResponse(responseText);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic API error ${response.status}: ${errorText}`);
+  }
+
+  const result = await response.json();
+  const text = result.content?.[0]?.text ?? "";
+  return parseClaudeResponse(text);
 }
 
 export function getMediaType(
