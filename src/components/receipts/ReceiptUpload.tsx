@@ -127,38 +127,26 @@ export function ReceiptUpload() {
         items: { item_name: string; quantity: number; unit_price: number; line_total: number; category: string }[];
       };
       let ocrData: OcrResult | null = null;
+      let ocrErrorText: string | null = null;
 
       try {
-        // For images use the already-loaded preview DataURL; for PDFs read the file now
-        let base64: string;
-        if (selectedFile.type === "application/pdf") {
-          const arrayBuffer = await selectedFile.arrayBuffer();
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = "";
-          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-          base64 = btoa(binary);
-        } else if (preview) {
-          base64 = preview.split(",")[1];
-        } else {
-          throw new Error("No file data available");
-        }
-
+        // Send the already-uploaded CloudFront URL — Anthropic fetches it directly,
+        // avoiding re-encoding a potentially large PDF as base64.
         const ocrRes = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mediaType: selectedFile.type }),
+          body: JSON.stringify({ imageUrl, mediaType: selectedFile.type }),
         });
         if (ocrRes.ok) {
           ocrData = await ocrRes.json();
         } else {
           const errBody = await ocrRes.json().catch(() => ({ error: "Unknown OCR error" }));
-          console.error("[ReceiptIQ] OCR failed:", errBody.error);
-          toast({ title: "OCR failed", description: errBody.error, variant: "destructive" });
+          ocrErrorText = errBody.error;
+          console.error("[ReceiptIQ] OCR failed:", ocrErrorText);
         }
       } catch (ocrErr) {
-        const msg = ocrErr instanceof Error ? ocrErr.message : "OCR request failed";
-        console.error("[ReceiptIQ] OCR exception:", msg);
-        toast({ title: "OCR failed", description: msg, variant: "destructive" });
+        ocrErrorText = ocrErr instanceof Error ? ocrErr.message : "OCR request failed";
+        console.error("[ReceiptIQ] OCR exception:", ocrErrorText);
       }
 
       setUploadState("saving");
@@ -177,7 +165,7 @@ export function ReceiptUpload() {
           s3Key,
           source: "upload",
           contentHashInput: contentHash,
-          rawOcrText: ocrData ? JSON.stringify(ocrData) : null,
+          rawOcrText: ocrData ? JSON.stringify(ocrData) : (ocrErrorText ? `OCR_ERROR: ${ocrErrorText}` : null),
           items: ocrData?.items?.map((item) => ({
             itemName: item.item_name,
             quantity: item.quantity,

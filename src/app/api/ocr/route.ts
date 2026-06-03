@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { extractReceiptFromImage, extractReceiptFromPdf, getMediaType } from "@/lib/claude";
+import { extractReceiptFromImage, extractReceiptFromPdf, extractReceiptFromUrl, getMediaType } from "@/lib/claude";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -9,17 +9,23 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { imageBase64, mediaType } = await request.json();
+    const { imageBase64, imageUrl, mediaType } = await request.json();
 
-    if (!imageBase64 || !mediaType) {
-      return NextResponse.json(
-        { error: "imageBase64 and mediaType are required" },
-        { status: 400 }
-      );
+    if (!mediaType) {
+      return NextResponse.json({ error: "mediaType is required" }, { status: 400 });
+    }
+
+    // Prefer URL-based OCR (no large payload, Anthropic fetches directly)
+    if (imageUrl) {
+      const result = await extractReceiptFromUrl(imageUrl, mediaType);
+      return NextResponse.json(result);
+    }
+
+    if (!imageBase64) {
+      return NextResponse.json({ error: "imageBase64 or imageUrl is required" }, { status: 400 });
     }
 
     const buffer = Buffer.from(imageBase64, "base64");
-
     const result =
       mediaType === "application/pdf"
         ? await extractReceiptFromPdf(buffer)
