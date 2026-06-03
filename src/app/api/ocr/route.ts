@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("OCR error:", err);
-    return NextResponse.json({ error: "OCR failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "OCR failed";
+    console.error("OCR error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

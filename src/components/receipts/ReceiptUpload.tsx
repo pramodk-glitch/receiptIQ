@@ -150,9 +150,15 @@ export function ReceiptUpload() {
         });
         if (ocrRes.ok) {
           ocrData = await ocrRes.json();
+        } else {
+          const errBody = await ocrRes.json().catch(() => ({ error: "Unknown OCR error" }));
+          console.error("[ReceiptIQ] OCR failed:", errBody.error);
+          toast({ title: "OCR failed", description: errBody.error, variant: "destructive" });
         }
-      } catch {
-        // OCR failed — receipt will be saved with placeholder values
+      } catch (ocrErr) {
+        const msg = ocrErr instanceof Error ? ocrErr.message : "OCR request failed";
+        console.error("[ReceiptIQ] OCR exception:", msg);
+        toast({ title: "OCR failed", description: msg, variant: "destructive" });
       }
 
       setUploadState("saving");
