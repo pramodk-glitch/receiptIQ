@@ -1,14 +1,11 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import pg from "pg";
 
 const { Pool } = pg;
 
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
-const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 
 let dbPool = null;
 
@@ -57,39 +54,31 @@ function getImageMediaType(key) {
   return map[ext] ?? "image/jpeg";
 }
 
-async function extractWithAnthropic(imageBuffer, mediaType) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set in Lambda environment variables");
-
-  const base64 = imageBuffer.toString("base64");
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mediaType, data: base64 },
-          },
-          {
-            type: "text",
-            text: `Extract all data from this receipt image and return ONLY a JSON object — no markdown, no explanation, no extra text. Look carefully at the actual text visible in the image; do not guess or invent store names or items.
+const RECEIPT_PROMPT = `Extract all data from this receipt and return ONLY a JSON object — no markdown, no explanation, no extra text. Read only what is actually printed; do not guess or invent store names or items.
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
 
-category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`,
-          },
-        ],
-      }],
+category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
+
+async function callAnthropic(content) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set in Lambda environment variables");
+
+  const isPdf = content.some(c => c.type === "document");
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+  if (isPdf) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      messages: [{ role: "user", content }],
     }),
   });
 
@@ -104,136 +93,41 @@ category must be one of: Groceries, Electronics, Dining, Medicine, Household, Pe
   return JSON.parse(cleaned);
 }
 
+async function extractWithAnthropic(imageBuffer, mediaType) {
+  const base64 = imageBuffer.toString("base64");
+  return callAnthropic([
+    { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+    { type: "text", text: RECEIPT_PROMPT },
+  ]);
+}
+
+async function extractPdfWithAnthropic(pdfBytes) {
+  const base64 = pdfBytes.toString("base64");
+  return callAnthropic([
+    { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+    { type: "text", text: RECEIPT_PROMPT },
+  ]);
+}
+
 async function streamToBuffer(stream) {
   const chunks = [];
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks);
 }
 
-function parsePdfText(text) {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-
-  // Store name: first non-empty line, or look for known chains
-  const knownChains = ["target", "walmart", "costco", "kroger", "whole foods", "trader joe", "safeway", "cvs", "walgreens"];
-  let storeName = lines[0] || "Unknown Store";
-  for (const line of lines.slice(0, 10)) {
-    if (knownChains.some(c => line.toLowerCase().includes(c))) {
-      storeName = line;
-      break;
-    }
-  }
-
-  // Date: find MM/DD/YYYY or YYYY-MM-DD pattern
-  let receiptDate = new Date().toISOString().split("T")[0];
-  for (const line of lines) {
-    const m = line.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if (m) {
-      const yr = m[3].length === 2 ? "20" + m[3] : m[3];
-      receiptDate = `${yr}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
-      break;
-    }
-  }
-
-  // Total: last line matching TOTAL followed by a dollar amount
-  let total = 0;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/total/i.test(lines[i])) {
-      const m = lines[i].match(/\$?\s*(\d+\.\d{2})/);
-      if (m) { total = parseFloat(m[1]); break; }
-      // Amount might be on the next line
-      if (i + 1 < lines.length) {
-        const m2 = lines[i + 1].match(/\$?\s*(\d+\.\d{2})/);
-        if (m2) { total = parseFloat(m2[1]); break; }
-      }
-    }
-  }
-
-  // Line items: lines where text is followed by a price (e.g. "Organic Milk  3.99")
-  const items = [];
-  const itemRe = /^(.+?)\s{2,}\$?\s*(\d+\.\d{2})\s*$/;
-  const skipWords = /^(subtotal|total|tax|change|cash|credit|debit|balance|savings|discount)/i;
-  for (const line of lines) {
-    if (skipWords.test(line)) continue;
-    const m = line.match(itemRe);
-    if (m) {
-      const name = m[1].trim();
-      const price = parseFloat(m[2]);
-      if (name.length > 1 && price > 0 && price < 10000) {
-        items.push({ item_name: name, quantity: 1, unit_price: price, line_total: price, category: "General" });
-      }
-    }
-  }
-
-  return {
-    store_name: storeName,
-    store_chain: storeName,
-    receipt_date: receiptDate,
-    total_amount: total,
-    currency: "USD",
-    items,
-  };
-}
-
-async function extractWithBedrock(pdfBytes) {
-  console.log("Falling back to Bedrock Claude for image-based PDF");
-  const body = JSON.stringify({
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: 2048,
-    messages: [{
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: pdfBytes.toString("base64") },
-        },
-        {
-          type: "text",
-          text: `Extract all data from this receipt and return ONLY a JSON object, no markdown:
-{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
-category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`,
-        },
-      ],
-    }],
-  });
-
-  const response = await bedrock.send(new InvokeModelCommand({
-    modelId: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    contentType: "application/json",
-    accept: "application/json",
-    body,
-  }));
-
-  const result = JSON.parse(Buffer.from(response.body).toString());
-  const text = result.content?.[0]?.text ?? "";
-  const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-  return JSON.parse(cleaned);
-}
-
 async function extractReceiptFromImage(bucket, key) {
   const isPdf = key.toLowerCase().endsWith(".pdf");
+  const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const fileBytes = await streamToBuffer(s3Obj.Body);
 
   if (isPdf) {
-    const s3Obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const pdfBytes = await streamToBuffer(s3Obj.Body);
-
-    // Try text extraction first (fast, free)
-    const { text } = await pdfParse(pdfBytes);
-    console.log("PDF text extracted, length:", text.length);
-
-    if (text && text.trim().length >= 20) {
-      return parsePdfText(text);
-    }
-
-    // Image-based PDF — use Bedrock Claude
-    return extractWithBedrock(pdfBytes);
+    console.log("Using Anthropic API for PDF OCR:", key);
+    return extractPdfWithAnthropic(fileBytes);
   }
 
-  // Images: use Anthropic Claude vision
   console.log("Using Anthropic API for image OCR:", key);
-  const s3Img = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  const imageBuffer = await streamToBuffer(s3Img.Body);
   const mediaType = getImageMediaType(key);
-  return extractWithAnthropic(imageBuffer, mediaType);
+  return extractWithAnthropic(fileBytes, mediaType);
 }
 
 export const handler = async (event) => {
