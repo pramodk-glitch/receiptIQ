@@ -138,19 +138,20 @@ export async function POST(request: NextRequest) {
 
         await tx.receiptItem.createMany({ data: itemRows });
 
-        // Populate PriceHistory for price intelligence
-        const priceRows = itemRows
-          .filter((i) => i.unitPrice > 0 && storeChain)
-          .map((i) => ({
-            userId: session.user.id!,
-            itemNameNormalized: i.itemNameNormalized,
-            storeChain: String(storeChain),
-            unitPrice: i.unitPrice,
-            category: i.category,
-          }));
-
-        if (priceRows.length > 0) {
-          await tx.priceHistory.createMany({ data: priceRows });
+        // Populate PriceHistory via raw SQL — bypasses generated-type lag
+        // when the category column is newly added to the schema.
+        const sc = storeChain ? String(storeChain).trim() : "";
+        if (sc) {
+          for (const row of itemRows) {
+            if (row.unitPrice > 0) {
+              await tx.$executeRaw`
+                INSERT INTO "PriceHistory"
+                  (id, "itemNameNormalized", "storeChain", "unitPrice", category, "capturedAt", source, "userId")
+                VALUES
+                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, NOW(), 'receipt', ${session.user.id!})
+              `;
+            }
+          }
         }
       }
 

@@ -52,7 +52,6 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          no-cache: false
         env:
           BUILDKIT_PROGRESS: plain
 
