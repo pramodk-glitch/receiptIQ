@@ -229,13 +229,25 @@ export async function extractReceiptFromImage(
 }
 
 export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResult> {
+  // Use fetch directly — SDK v0.27 silently drops document blocks.
+  const base64Pdf = pdfBuffer.toString("base64");
+  const content = [
+    { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
+    { type: "text", text: RECEIPT_PROMPT },
+  ];
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
+  return parseClaudeResponse(text);
+}
+
+/** Shared fetch-based caller — avoids SDK document-block drop bug for PDFs */
+async function callAnthropicApi(
+  model: string,
+  max_tokens: number,
+  content: unknown[],
+): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
-  const base64Pdf = pdfBuffer.toString("base64");
-
-  // Use fetch directly — SDK v0.27 silently drops document blocks,
-  // causing Claude to receive no content and hallucinate a receipt.
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -243,30 +255,16 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: base64Pdf },
-          },
-          { type: "text", text: RECEIPT_PROMPT },
-        ],
-      }],
-    }),
+    body: JSON.stringify({ model, max_tokens, messages: [{ role: "user", content }] }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${errorText}`);
+    const err = await response.text();
+    throw new Error(`Anthropic API error ${response.status}: ${err}`);
   }
 
   const result = await response.json();
-  const text = result.content?.[0]?.text ?? "";
-  return parseClaudeResponse(text);
+  return result.content?.[0]?.text ?? "";
 }
 
 export async function extractReceiptFromUrl(
@@ -274,26 +272,18 @@ export async function extractReceiptFromUrl(
   mediaType: string,
   formatHints?: string,
 ): Promise<OcrResult> {
-  // Build prompt — prepend store-specific format hints if available
   const prompt = formatHints
     ? `${formatHints}\n\n---\n\n${RECEIPT_PROMPT}`
     : RECEIPT_PROMPT;
 
-  // SDK v0.27 types don't include URL sources — cast content to any to bypass
-  // the compile-time constraint while still using the SDK for auth/transport.
   const isPdf = mediaType === "application/pdf";
-  const content: unknown[] = isPdf
+  // Use fetch directly for ALL URL calls — the SDK silently drops document
+  // blocks (both base64 and URL-sourced), causing empty responses for PDFs.
+  const content = isPdf
     ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: prompt }]
     : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: prompt }];
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8192,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: [{ role: "user", content: content as any }],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
   return parseClaudeResponse(text);
 }
 
@@ -305,19 +295,12 @@ export async function identifyStore(url: string, mediaType: string): Promise<str
   try {
     const isPdf = mediaType === "application/pdf";
     const storePrompt = "Identify the store or business from this receipt image. Look for store name text, logos, or branding (e.g. Target's red bullseye, Walmart's spark, Costco's logo). Reply with ONLY the store name (e.g. 'Target', 'Walmart', 'Patidar Supermarket'). If unknown, reply 'Unknown'.";
-    const content: unknown[] = isPdf
+    const content = isPdf
       ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: storePrompt }]
       : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: storePrompt }];
 
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 30,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: [{ role: "user", content: content as any }],
-    });
-
-    const name = message.content[0].type === "text" ? message.content[0].text.trim() : "";
-    return name || "Unknown";
+    const name = await callAnthropicApi("claude-haiku-4-5", 30, content);
+    return name.trim() || "Unknown";
   } catch {
     return "Unknown"; // non-fatal — OCR proceeds without hints
   }
