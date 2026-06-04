@@ -122,10 +122,17 @@ jobs:
           IMAGE="${{ needs.build-and-push.outputs.image-tag }}"
           ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
 
+          # Resolve the Anthropic secret ARN from Secrets Manager by name
+          ANTHROPIC_SECRET_ARN=$(aws secretsmanager describe-secret \
+            --secret-id "receiptiq/anthropic-api-key" \
+            --region ${{ env.AWS_REGION }} \
+            --query ARN --output text 2>/dev/null || echo "")
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "{\"commands\":[
+              \"grep -q ANTHROPIC_SECRET_ARN /home/ubuntu/receiptiq.env || echo 'ANTHROPIC_SECRET_ARN=${ANTHROPIC_SECRET_ARN}' >> /home/ubuntu/receiptiq.env\",
               \"/usr/local/bin/aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
               \"docker pull ${IMAGE}\",
               \"docker network create receiptiq_net 2>/dev/null || true\",

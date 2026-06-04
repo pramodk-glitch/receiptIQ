@@ -34,6 +34,11 @@ output "db_secret_arn" {
   value       = aws_secretsmanager_secret.db_url.arn
 }
 
+output "anthropic_secret_arn" {
+  description = "Secrets Manager ARN containing the Anthropic API key — add ANTHROPIC_SECRET_ARN to /home/ubuntu/receiptiq.env on EC2 (handled automatically by deploy.yml)"
+  value       = aws_secretsmanager_secret.anthropic_key.arn
+}
+
 output "lambda_function_name" {
   description = "OCR Lambda function name"
   value       = aws_lambda_function.ocr_processor.function_name
