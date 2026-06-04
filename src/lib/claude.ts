@@ -264,44 +264,66 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
 }
 
 export async function extractReceiptFromPdfWithPrompt(pdfBuffer: Buffer, prompt: string): Promise<OcrResult> {
-  // Extract text from PDF — works for digital receipts (Target, Amazon, etc.)
-  // This completely avoids the document-block hallucination issue: we send
-  // the actual text content as a plain text message instead.
+  // ── Path 1: text extraction (fast, zero-hallucination) ──────────────────
   const { extractPdfText } = await import("./pdf-extract");
   const pdfText = await extractPdfText(pdfBuffer);
   console.log(`[PDF OCR] Extracted ${pdfText.length} chars of text from PDF`);
 
-  if (!pdfText.trim()) {
-    throw new Error("Could not extract text from PDF — it may be a scanned/image-only PDF");
+  if (pdfText.trim()) {
+    const content = [
+      { type: "text", text: `The following is the full text content extracted from a receipt PDF:\n\n${pdfText}\n\n---\n\n${prompt}` },
+    ];
+    const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, false);
+    console.log(`[PDF OCR] Text-path response (first 200 chars): ${text.substring(0, 200)}`);
+    const result = parseClaudeResponse(text);
+
+    const warnings = validateOcrAgainstSource(result, pdfText);
+    if (warnings.length === 0) return result;
+    console.warn(`[PDF OCR] Text-path validation warnings:`, warnings);
+    // Fall through to image path if text result looks wrong
   }
 
-  const content = [
-    { type: "text", text: `The following is the full text content extracted from a receipt PDF:\n\n${pdfText}\n\n---\n\n${prompt}` },
-  ];
-  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, false);
-  console.log(`[PDF OCR] Response (first 200 chars): ${text.substring(0, 200)}`);
-  const result = parseClaudeResponse(text);
+  // ── Path 2: image rendering via pdftoppm (handles image-only / HTML PDFs) ─
+  console.log(`[PDF OCR] Falling back to image rendering via pdftoppm`);
+  const { pdfToImages } = await import("./pdf-to-images");
+  const images = await pdfToImages(pdfBuffer);
+  console.log(`[PDF OCR] Rendered ${images.length} image section(s)`);
 
-  // Validate against source text to catch hallucinations
-  const warnings = validateOcrAgainstSource(result, pdfText);
-  if (warnings.length > 0) {
-    console.warn(`[PDF OCR] Validation warnings:`, warnings);
-    throw new Error(`OCR result failed validation: ${warnings.join("; ")}`);
-  }
+  const imageContent: unknown[] = images.map((img) => ({
+    type: "image",
+    source: { type: "base64", media_type: "image/jpeg", data: img.toString("base64") },
+  }));
+  imageContent.push({ type: "text", text: prompt });
 
-  return result;
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, imageContent, false);
+  console.log(`[PDF OCR] Image-path response (first 200 chars): ${text.substring(0, 200)}`);
+  return parseClaudeResponse(text);
 }
 
 export async function identifyStoreFromBuffer(pdfBuffer: Buffer): Promise<string> {
   try {
     const { extractPdfText } = await import("./pdf-extract");
     const pdfText = await extractPdfText(pdfBuffer);
-    if (!pdfText.trim()) return "Unknown";
 
-    const storePrompt = `The following is text from a receipt. What is the store or business name? Reply with ONLY the store name (e.g. 'Target', 'Walmart'). If unknown, reply 'Unknown'.\n\n${pdfText.substring(0, 500)}`;
-    const content = [{ type: "text", text: storePrompt }];
+    if (pdfText.trim()) {
+      const storePrompt = `The following is text from a receipt. What is the store or business name? Reply with ONLY the store name (e.g. 'Target', 'Walmart'). If unknown, reply 'Unknown'.\n\n${pdfText.substring(0, 500)}`;
+      const name = await callAnthropicApi("claude-haiku-4-5", 50, [{ type: "text", text: storePrompt }], false);
+      console.log(`[PDF store ID via text] "${name.trim()}"`);
+      return name.trim() || "Unknown";
+    }
+
+    // No text — use first rendered image (header of receipt has the logo/name)
+    const { pdfToImages } = await import("./pdf-to-images");
+    const images = await pdfToImages(pdfBuffer);
+    if (images.length === 0) return "Unknown";
+
+    const storePrompt = "Identify the store or business from this receipt. Look for store name text or logos. Reply with ONLY the store name. If unknown, reply 'Unknown'.";
+    const content = [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: images[0].toString("base64") } },
+      { type: "text", text: storePrompt },
+    ];
     const name = await callAnthropicApi("claude-haiku-4-5", 50, content, false);
-    console.log(`[PDF store ID] "${name.trim()}"`);
+    console.log(`[PDF store ID via image] "${name.trim()}"`);
     return name.trim() || "Unknown";
   } catch (e) {
     console.error("[PDF store ID] failed:", e);
