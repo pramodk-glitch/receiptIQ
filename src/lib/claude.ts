@@ -84,13 +84,30 @@ function validateOcrResult(data: unknown): OcrResult {
   if (Array.isArray(obj.items)) {
     result.items = obj.items
       .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-      .map((item) => ({
-        item_name: typeof item.item_name === "string" ? item.item_name : "Unknown Item",
-        quantity: typeof item.quantity === "number" ? item.quantity : 1,
-        unit_price: typeof item.unit_price === "number" ? item.unit_price : 0,
-        line_total: typeof item.line_total === "number" ? item.line_total : 0,
-        category: normalizeCategory(typeof item.category === "string" ? item.category : "General"),
-      }));
+      .map((item) => {
+        const quantity   = typeof item.quantity   === "number" ? item.quantity   : 1;
+        const unit_price = typeof item.unit_price === "number" ? item.unit_price : 0;
+        const line_total = typeof item.line_total === "number" ? item.line_total : 0;
+
+        // Sanity-check: qty × unit_price should equal line_total (within $0.02).
+        // If not, infer the missing value from the other two.
+        let q = quantity, u = unit_price, t = line_total;
+        if (u > 0 && t > 0 && Math.abs(q * u - t) > 0.02) {
+          // Try to recover quantity from total / unit_price
+          const inferredQty = Math.round(t / u);
+          if (inferredQty > 0 && Math.abs(inferredQty * u - t) <= 0.02) {
+            q = inferredQty;
+          }
+        }
+
+        return {
+          item_name: typeof item.item_name === "string" ? item.item_name : "Unknown Item",
+          quantity:   q,
+          unit_price: u,
+          line_total: t,
+          category: normalizeCategory(typeof item.category === "string" ? item.category : "General"),
+        };
+      });
   }
 
   return result;
@@ -110,14 +127,6 @@ item_name:
 
 quantity:
 - Number of units purchased (positive number).
-- Some receipts print the qty/price on a SEPARATE INDENTED LINE immediately below the item name:
-    5 CHINESE BROOM
-                2 @ 4.99    9.98
-    6 BLUEBERRIES : 1 pint
-                1 @ 3.99    3.99
-  In this layout the indented "QTY @ UNIT_PRICE  LINE_TOTAL" line belongs to the item name DIRECTLY ABOVE it — NOT to the item below it.
-  So "2 @ 4.99  9.98" → Chinese Broom qty=2, unit_price=4.99, line_total=9.98.
-  And "1 @ 3.99  3.99" → Blueberries qty=1, unit_price=3.99, line_total=3.99.
 - The number BEFORE "@" is the quantity. Do NOT treat it as a line/item number.
 - For weight-priced items the quantity is the weight (e.g. 1.43 lbs). Use the decimal weight as-is.
 - Default 1 if not shown.
@@ -126,6 +135,18 @@ unit_price:
 - Price for one unit or one lb/kg (positive number).
 - In the format "QTY @ UNIT_PRICE  LINE_TOTAL", the number AFTER "@" is the unit_price.
 - Never negative.
+
+CRITICAL — math validation:
+After extracting every item, verify: round(quantity × unit_price, 2) must equal line_total.
+If they do not match, you have misattributed the price line. Fix it before returning.
+Example of correct attribution in a two-line-per-item layout:
+  4 LAXMI IDLY RICE 20LB
+                  1 @ 23.99   23.99   ← qty=1, unit=23.99, total=23.99  ✓ (1×23.99=23.99)
+  5 CHINESE BROOM
+                  2 @ 4.99     9.98   ← qty=2, unit=4.99,  total=9.98   ✓ (2×4.99=9.98)
+  6 BLUEBERRIES 1 PINT
+                  1 @ 3.99     3.99   ← qty=1, unit=3.99,  total=3.99   ✓ (1×3.99=3.99)
+Each indented price line belongs to the item name IMMEDIATELY ABOVE it.
 
 line_total:
 - The actual charged amount for that item (positive number).
