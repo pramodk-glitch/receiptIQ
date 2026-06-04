@@ -179,7 +179,9 @@ export const handler = async (event) => {
           `SELECT "rawOcrText" FROM "Receipt" WHERE id = $1`,
           [receiptId]
         );
-        if (freshCheck.rows[0]?.rawOcrText != null) {
+        const existingOcr = freshCheck.rows[0]?.rawOcrText;
+        const hasRealOcr = existingOcr != null && !String(existingOcr).startsWith('OCR_ERROR:');
+        if (hasRealOcr) {
           console.log(`Receipt ${receiptId} already processed by API route, skipping Lambda update`);
           continue;
         }
