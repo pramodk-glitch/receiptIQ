@@ -22,39 +22,37 @@ export async function GET(request: NextRequest) {
     minPrice: number;
     purchases: number;
   }>>`
-    WITH ph AS (
+    WITH item_cats AS (
+      SELECT DISTINCT ON ("itemNameNormalized")
+        "itemNameNormalized",
+        category
+      FROM "ReceiptItem"
+      WHERE "userId" = ${userId}
+      ORDER BY "itemNameNormalized", "createdAt" DESC
+    ),
+    ph_agg AS (
       SELECT
-        ph."itemNameNormalized",
-        -- prefer PriceHistory.category; fall back to most recent ReceiptItem category
-        COALESCE(
-          NULLIF(ph.category, 'General'),
-          (
-            SELECT ri.category
-            FROM "ReceiptItem" ri
-            WHERE ri."userId" = ph."userId"
-              AND ri."itemNameNormalized" = ph."itemNameNormalized"
-            ORDER BY ri."createdAt" DESC
-            LIMIT 1
-          ),
-          'General'
-        ) AS category,
-        ph."storeChain",
-        ph."unitPrice"
-      FROM "PriceHistory" ph
-      WHERE ph."userId" = ${userId}
-        AND ph."unitPrice" > 0
-        AND ph."storeChain" != ''
+        "itemNameNormalized",
+        "storeChain",
+        CAST(AVG("unitPrice") AS float) AS "avgPrice",
+        CAST(MIN("unitPrice") AS float) AS "minPrice",
+        COUNT(*)::int AS purchases
+      FROM "PriceHistory"
+      WHERE "userId" = ${userId}
+        AND "unitPrice" > 0
+        AND "storeChain" != ''
+      GROUP BY "itemNameNormalized", "storeChain"
     )
     SELECT
-      "itemNameNormalized",
-      category,
-      "storeChain",
-      CAST(AVG("unitPrice") AS float) AS "avgPrice",
-      CAST(MIN("unitPrice") AS float) AS "minPrice",
-      COUNT(*)::int AS purchases
-    FROM ph
-    GROUP BY "itemNameNormalized", category, "storeChain"
-    ORDER BY category, "itemNameNormalized", "avgPrice" ASC
+      p."itemNameNormalized",
+      COALESCE(ic.category, 'General') AS category,
+      p."storeChain",
+      p."avgPrice",
+      p."minPrice",
+      p.purchases
+    FROM ph_agg p
+    LEFT JOIN item_cats ic USING ("itemNameNormalized")
+    ORDER BY category, p."itemNameNormalized", p."avgPrice" ASC
   `;
 
   // Group into category → item → stores
