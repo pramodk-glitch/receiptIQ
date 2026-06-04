@@ -269,13 +269,22 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
   return parseClaudeResponse(text);
 }
 
-export async function extractReceiptFromUrl(url: string, mediaType: string): Promise<OcrResult> {
+export async function extractReceiptFromUrl(
+  url: string,
+  mediaType: string,
+  formatHints?: string,
+): Promise<OcrResult> {
+  // Build prompt — prepend store-specific format hints if available
+  const prompt = formatHints
+    ? `${formatHints}\n\n---\n\n${RECEIPT_PROMPT}`
+    : RECEIPT_PROMPT;
+
   // SDK v0.27 types don't include URL sources — cast content to any to bypass
   // the compile-time constraint while still using the SDK for auth/transport.
   const isPdf = mediaType === "application/pdf";
   const content: unknown[] = isPdf
-    ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: RECEIPT_PROMPT }]
-    : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: RECEIPT_PROMPT }];
+    ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: prompt }]
+    : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: prompt }];
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -286,6 +295,31 @@ export async function extractReceiptFromUrl(url: string, mediaType: string): Pro
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
   return parseClaudeResponse(text);
+}
+
+/**
+ * Lightweight pre-pass: extract just the store name from the receipt header.
+ * Uses claude-haiku for speed and low cost (~10x cheaper than Sonnet).
+ */
+export async function identifyStore(url: string, mediaType: string): Promise<string> {
+  try {
+    const isPdf = mediaType === "application/pdf";
+    const content: unknown[] = isPdf
+      ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: "What is the store or business name shown on this receipt? Reply with ONLY the store name, nothing else. If unknown, reply 'Unknown'." }]
+      : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: "What is the store or business name shown on this receipt? Reply with ONLY the store name, nothing else. If unknown, reply 'Unknown'." }];
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 30,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messages: [{ role: "user", content: content as any }],
+    });
+
+    const name = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    return name || "Unknown";
+  } catch {
+    return "Unknown"; // non-fatal — OCR proceeds without hints
+  }
 }
 
 export function getMediaType(

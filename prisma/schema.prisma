@@ -62,6 +62,17 @@ model ReceiptItem {
   @@index([receiptId])
 }
 
+model StoreFormat {
+  id          String   @id @default(uuid())
+  storeName   String   @unique  // lowercase normalised
+  formatHints String   // prompt snippet injected before OCR
+  sampleCount Int      @default(1)
+  lastSeen    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([storeName])
+}
+
 model PriceHistory {
   id                 String   @id @default(uuid())
   itemNameNormalized String

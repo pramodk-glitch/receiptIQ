@@ -50,7 +50,25 @@ async function main() {
     console.error("Schema push warning (non-fatal):", e.message);
   }
 
-  // ── 2b. Ensure PriceHistory.category column exists (idempotent) ──────────
+  // ── 2b. Ensure StoreFormat table exists (idempotent) ────────────────────
+  try {
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "StoreFormat" (
+        id          TEXT        NOT NULL PRIMARY KEY,
+        "storeName" TEXT        NOT NULL UNIQUE,
+        "formatHints" TEXT      NOT NULL,
+        "sampleCount" INTEGER   NOT NULL DEFAULT 1,
+        "lastSeen"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "StoreFormat_storeName_idx" ON "StoreFormat"("storeName")`;
+    console.log("StoreFormat table ensured");
+  } catch (e) {
+    console.error("StoreFormat table error (non-fatal):", e.message);
+  }
+
+  // ── 2d. Ensure PriceHistory.category column exists (idempotent) ──────────
   // prisma db push may silently skip additive changes on some environments;
   // run the ALTER explicitly so the column is always present.
   const prisma = new PrismaClient();
