@@ -159,6 +159,37 @@ total_amount: grand total charged after tax.
 N or T after a price = non-taxable / taxable — ignore.
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
+/**
+ * Sanity-check a parsed OCR result against the raw source text.
+ * Returns a list of warnings; an empty array means the result looks valid.
+ */
+export function validateOcrAgainstSource(result: OcrResult, sourceText: string): string[] {
+  const warnings: string[] = [];
+
+  // 1. Total amount should appear somewhere in the source text
+  if (result.total_amount > 0) {
+    const totalStr = result.total_amount.toFixed(2);
+    if (!sourceText.includes(totalStr)) {
+      warnings.push(`total_amount $${totalStr} not found in source text — possible hallucination`);
+    }
+  }
+
+  // 2. Store name should appear somewhere in the source text
+  if (result.store_name && result.store_name !== "Unknown Store") {
+    const firstName = result.store_name.split(" ")[0].toLowerCase();
+    if (firstName.length > 3 && !sourceText.toLowerCase().includes(firstName)) {
+      warnings.push(`store_name "${result.store_name}" not found in source text — possible hallucination`);
+    }
+  }
+
+  // 3. Date should be parseable and not the default Jan 1 2024 hallucination
+  if (result.receipt_date === "2024-01-01") {
+    warnings.push(`receipt_date is the common hallucination default "2024-01-01" — likely wrong`);
+  }
+
+  return warnings;
+}
+
 function parseClaudeResponse(responseText: string): OcrResult {
   const cleanedText = responseText
     .replace(/^```json\s*/i, "")
@@ -232,33 +263,44 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
   return extractReceiptFromPdfWithPrompt(pdfBuffer, RECEIPT_PROMPT);
 }
 
-
-// claude-sonnet-4-6 has native PDF support — no beta header required.
-// (pdfs-2024-09-25 was a Claude 3.x beta; Claude 4 models support PDFs natively)
-const PDF_MODEL = "claude-sonnet-4-6";
-
 export async function extractReceiptFromPdfWithPrompt(pdfBuffer: Buffer, prompt: string): Promise<OcrResult> {
-  const base64Pdf = pdfBuffer.toString("base64");
-  console.log(`[PDF OCR] Sending ${Math.round(base64Pdf.length / 1024)}KB base64 to ${PDF_MODEL}`);
+  // Extract text from PDF — works for digital receipts (Target, Amazon, etc.)
+  // This completely avoids the document-block hallucination issue: we send
+  // the actual text content as a plain text message instead.
+  const { extractPdfText } = await import("./pdf-extract");
+  const pdfText = await extractPdfText(pdfBuffer);
+  console.log(`[PDF OCR] Extracted ${pdfText.length} chars of text from PDF`);
+
+  if (!pdfText.trim()) {
+    throw new Error("Could not extract text from PDF — it may be a scanned/image-only PDF");
+  }
+
   const content = [
-    { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
-    { type: "text", text: prompt },
+    { type: "text", text: `The following is the full text content extracted from a receipt PDF:\n\n${pdfText}\n\n---\n\n${prompt}` },
   ];
-  const text = await callAnthropicApi(PDF_MODEL, 8192, content, true);
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, false);
   console.log(`[PDF OCR] Response (first 200 chars): ${text.substring(0, 200)}`);
-  return parseClaudeResponse(text);
+  const result = parseClaudeResponse(text);
+
+  // Validate against source text to catch hallucinations
+  const warnings = validateOcrAgainstSource(result, pdfText);
+  if (warnings.length > 0) {
+    console.warn(`[PDF OCR] Validation warnings:`, warnings);
+    throw new Error(`OCR result failed validation: ${warnings.join("; ")}`);
+  }
+
+  return result;
 }
 
 export async function identifyStoreFromBuffer(pdfBuffer: Buffer): Promise<string> {
   try {
-    const base64Pdf = pdfBuffer.toString("base64");
-    const storePrompt = "Identify the store or business from this receipt. Look for store name text, logos, or branding (e.g. Target's red bullseye). Reply with ONLY the store name. If unknown, reply 'Unknown'.";
-    const content = [
-      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
-      { type: "text", text: storePrompt },
-    ];
-    // Use same confirmed-working PDF model for store ID
-    const name = await callAnthropicApi(PDF_MODEL, 50, content, true);
+    const { extractPdfText } = await import("./pdf-extract");
+    const pdfText = await extractPdfText(pdfBuffer);
+    if (!pdfText.trim()) return "Unknown";
+
+    const storePrompt = `The following is text from a receipt. What is the store or business name? Reply with ONLY the store name (e.g. 'Target', 'Walmart'). If unknown, reply 'Unknown'.\n\n${pdfText.substring(0, 500)}`;
+    const content = [{ type: "text", text: storePrompt }];
+    const name = await callAnthropicApi("claude-haiku-4-5", 50, content, false);
     console.log(`[PDF store ID] "${name.trim()}"`);
     return name.trim() || "Unknown";
   } catch (e) {
