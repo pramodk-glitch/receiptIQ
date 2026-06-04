@@ -232,13 +232,21 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
   return extractReceiptFromPdfWithPrompt(pdfBuffer, RECEIPT_PROMPT);
 }
 
+
+// Claude 3.5 Sonnet is used for PDF processing — PDF support (pdfs-2024-09-25
+// beta) is confirmed stable on 3.x models. Claude 4.x models may handle PDFs
+// differently and were causing silent hallucinations.
+const PDF_MODEL = "claude-3-5-sonnet-20241022";
+
 export async function extractReceiptFromPdfWithPrompt(pdfBuffer: Buffer, prompt: string): Promise<OcrResult> {
   const base64Pdf = pdfBuffer.toString("base64");
+  console.log(`[PDF OCR] Sending ${Math.round(base64Pdf.length / 1024)}KB base64 to ${PDF_MODEL}`);
   const content = [
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
     { type: "text", text: prompt },
   ];
-  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, true);
+  const text = await callAnthropicApi(PDF_MODEL, 8192, content, true);
+  console.log(`[PDF OCR] Response (first 200 chars): ${text.substring(0, 200)}`);
   return parseClaudeResponse(text);
 }
 
@@ -250,9 +258,12 @@ export async function identifyStoreFromBuffer(pdfBuffer: Buffer): Promise<string
       { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
       { type: "text", text: storePrompt },
     ];
-    const name = await callAnthropicApi("claude-haiku-4-5", 50, content, true);
+    // Use same confirmed-working PDF model for store ID
+    const name = await callAnthropicApi(PDF_MODEL, 50, content, true);
+    console.log(`[PDF store ID] "${name.trim()}"`);
     return name.trim() || "Unknown";
-  } catch {
+  } catch (e) {
+    console.error("[PDF store ID] failed:", e);
     return "Unknown";
   }
 }
