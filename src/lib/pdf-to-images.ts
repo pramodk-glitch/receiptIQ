@@ -20,10 +20,22 @@ export async function pdfToImages(pdfBuffer: Buffer): Promise<Buffer[]> {
   try {
     writeFileSync(pdfPath, pdfBuffer);
 
-    // Convert all pages to JPEG at 150 DPI
-    execSync(`pdftoppm -jpeg -r 150 "${pdfPath}" "${join(tmpDir, "p")}"`, {
-      timeout: 60_000,
-    });
+    // Convert all pages to JPEG — scale width to 1200px max (keeps aspect ratio).
+    // Lower resolution is intentional: Claude Vision doesn't need high DPI,
+    // and the Target receipt PDF is one very tall page that times out at 150 DPI.
+    let stderr = "";
+    try {
+      const result = execSync(
+        `pdftoppm -jpeg -scale-to-x 1200 -scale-to-y -1 "${pdfPath}" "${join(tmpDir, "p")}" 2>&1`,
+        { timeout: 120_000, encoding: "buffer" }
+      );
+      stderr = result.toString();
+    } catch (e: unknown) {
+      const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
+      stderr = (err.stderr ?? err.stdout ?? Buffer.alloc(0)).toString();
+      throw new Error(`pdftoppm failed: ${err.message ?? ""} | stderr: ${stderr.substring(0, 300)}`);
+    }
+    if (stderr) console.log(`[pdftoppm] output: ${stderr.substring(0, 200)}`);
 
     const pages = readdirSync(tmpDir)
       .filter((f) => f.startsWith("p") && f.endsWith(".jpg"))
