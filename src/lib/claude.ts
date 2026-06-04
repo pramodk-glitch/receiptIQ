@@ -78,9 +78,27 @@ function validateOcrResult(data: unknown): OcrResult {
   return result;
 }
 
-const RECEIPT_PROMPT = `Extract all data from this receipt and return ONLY a JSON object — no markdown, no explanation, no extra text. Read only what is actually printed; do not guess or invent store names or items.
+const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
+
+Follow these rules exactly:
+
+item_name: Product name only. Strip out any trailing codes, department numbers, discount markers, or price-like numbers that are not part of the product name. Example: if the receipt shows "BROOM -2" or "BROOM 047", the item_name is "Broom".
+
+quantity: Number of units bought (positive integer). Default 1 if not shown.
+
+unit_price: Price for ONE unit (positive number). If the receipt shows "2 x $11.99 = $23.98", unit_price is 11.99. Never include negative prices.
+
+line_total: quantity × unit_price (always a positive number).
+
+SKIP these lines entirely — do not create items for them:
+- Discounts, coupons, savings, or any line with a negative dollar amount
+- Tax, fee, tip, or charge lines
+- Subtotal, total, balance, change, cash, or payment lines
+- Loyalty points or reward lines
+
+total_amount: The final amount charged (the grand total on the receipt).
 
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
