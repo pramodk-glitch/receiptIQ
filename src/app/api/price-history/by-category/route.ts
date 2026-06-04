@@ -1,27 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import type { CategoryGroup, CategoryItem, StorePrice } from "@/types/price-intel";
 
-export interface StorePrice {
-  storeChain: string;
-  avgPrice: number;
-  minPrice: number;
-  purchases: number;
-  isCheapest: boolean;
-}
-
-export interface CategoryItem {
-  itemNameNormalized: string;
-  category: string;
-  stores: StorePrice[];
-  bestPrice: number;
-  multiStore: boolean;
-}
-
-export interface CategoryGroup {
-  category: string;
-  items: CategoryItem[];
-}
+export type { CategoryGroup, CategoryItem, StorePrice };
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -111,15 +93,17 @@ export async function GET(request: NextRequest) {
 
   for (const cat of [...categoryOrder, ...Object.keys(byCategory).filter(c => !categoryOrder.includes(c))]) {
     if (!byCategory[cat]) continue;
-    const items = Object.values(byCategory[cat]).map((item) => {
+    const items: CategoryGroup["items"] = Object.values(byCategory[cat]).flatMap((item) => {
       const sorted = [...item.stores].sort((a, b) => a.avgPrice - b.avgPrice);
-      sorted[0].isCheapest = true;
-      return {
-        ...item,
+      if (sorted.length === 0) return [];
+      sorted[0]!.isCheapest = true;
+      return [{
+        itemNameNormalized: item.itemNameNormalized,
+        category: item.category,
         stores: sorted,
-        bestPrice: sorted[0].avgPrice,
+        bestPrice: sorted[0]!.avgPrice,
         multiStore: sorted.length > 1,
-      };
+      }];
     });
     // Sort: multi-store items first (savings opportunity), then by name
     items.sort((a, b) => {

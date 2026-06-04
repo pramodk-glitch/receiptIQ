@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { PriceTrendChart } from "@/components/price-intel/PriceTrendChart";
 import { PriceAlertCard } from "@/components/price-intel/PriceAlertCard";
 import { PriceCategoryTree } from "@/components/price-intel/PriceCategoryTree";
-import type { CategoryGroup } from "@/app/api/price-history/by-category/route";
+import type { CategoryGroup } from "@/types/price-intel";
 
 async function getTopItems(userId: string): Promise<string[]> {
   const rows = await prisma.$queryRaw<Array<{ itemNameNormalized: string }>>`
@@ -147,10 +147,17 @@ async function getCategoryTree(userId: string): Promise<CategoryGroup[]> {
   const result: CategoryGroup[] = [];
   for (const cat of [...categoryOrder, ...Object.keys(byCategory).filter(c => !categoryOrder.includes(c))]) {
     if (!byCategory[cat]) continue;
-    const items = Object.values(byCategory[cat]).map((item) => {
+    const items: CategoryGroup["items"] = Object.values(byCategory[cat]).flatMap((item) => {
       const sorted = [...item.stores].sort((a, b) => a.avgPrice - b.avgPrice);
-      sorted[0].isCheapest = true;
-      return { ...item, stores: sorted, bestPrice: sorted[0].avgPrice, multiStore: sorted.length > 1 };
+      if (sorted.length === 0) return [];
+      sorted[0]!.isCheapest = true;
+      return [{
+        itemNameNormalized: item.itemNameNormalized,
+        category: item.category,
+        stores: sorted,
+        bestPrice: sorted[0]!.avgPrice,
+        multiStore: sorted.length > 1,
+      }];
     });
     items.sort((a, b) => {
       if (a.multiStore !== b.multiStore) return a.multiStore ? -1 : 1;

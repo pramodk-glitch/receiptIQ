@@ -1,27 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-
-interface StorePrice {
-  storeChain: string;
-  avgPrice: number;
-  minPrice: number;
-  purchases: number;
-  isCheapest: boolean;
-}
-
-interface CategoryItem {
-  itemNameNormalized: string;
-  category: string;
-  stores: StorePrice[];
-  bestPrice: number;
-  multiStore: boolean;
-}
-
-interface CategoryGroup {
-  category: string;
-  items: CategoryItem[];
-}
+import type { CategoryGroup } from "@/types/price-intel";
 
 interface Props {
   data: CategoryGroup[];
