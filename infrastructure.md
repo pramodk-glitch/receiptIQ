@@ -34,6 +34,111 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 
 ## AWS Architecture
 
+---
+
+## MVP Architecture (Personal use — Phase 1)
+
+### MVP Services
+
+| Service | Config | Purpose |
+|---|---|---|
+| **EC2 t3.micro** | 1 vCPU · 1 GB RAM · Docker | Runs Next.js web app + API routes |
+| **RDS db.t3.micro** | PostgreSQL 15 · 20 GB · single-AZ | Primary database |
+| **S3** | Private bucket | Receipt image storage |
+| **CloudFront** | In front of S3 | Fast image delivery via CDN |
+| **Lambda** | Triggered per S3 upload | Async OCR — calls Claude Vision, writes results to DB |
+| **Cognito** | User Pool · first 50k MAU free | Email/password + Google OAuth |
+| **Secrets Manager** | 2 secrets | Claude API key · DB password |
+| **Certificate Manager** | Free SSL | HTTPS on EC2 via ACM + ALB (optional) |
+| **Amazon CSV parser** | Built into API | No extra AWS service — CSV parsed in-memory on upload |
+
+### MVP Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph AWS["☁️ AWS us-east-1"]
+        subgraph UF["User-facing"]
+            W["🖥️ Web app\nNext.js 14 · EC2 t3.micro"]
+        end
+
+        subgraph APP["Application"]
+            API["⚙️ API routes\nNext.js · Node.js · EC2 t3.micro"]
+            LMB["⚡ Lambda\nAsync OCR processor"]
+            CL["🧠 Claude Vision\nLine-item extraction"]
+            COG["🔐 Cognito\nEmail · Google OAuth"]
+        end
+
+        subgraph DATA["Data"]
+            PG["🗄️ PostgreSQL\nRDS db.t3.micro"]
+            S3B["🪣 S3\nReceipt images · private"]
+            CF["🌐 CloudFront\nImage CDN"]
+            SM["🔑 Secrets Manager\nClaude key · DB password"]
+        end
+    end
+
+    W -->|"HTTPS · upload receipt"| API
+    COG -->|"JWT token"| API
+    API -->|"store image"| S3B
+    S3B -->|"S3 event trigger"| LMB
+    LMB -->|"Vision OCR"| CL
+    CL -->|"extracted JSON"| LMB
+    LMB -->|"save receipt + items"| PG
+    API -->|"read / write"| PG
+    S3B -->|"signed URL via CDN"| CF
+    SM -->|"inject at runtime"| API
+    SM -->|"inject at runtime"| LMB
+```
+
+### MVP Workflow Diagram
+
+```mermaid
+flowchart TD
+    A["🖥️ User opens web app\nLogs in via Cognito"]
+    A --> B["📎 Uploads receipt\nphoto · PDF · screenshot"]
+    A --> CSV["📦 Uploads Amazon CSV\norder history export"]
+    B --> C["🪣 S3\nImage stored in private bucket"]
+    C --> D["⚡ Lambda triggered\nS3 PutObject event"]
+    D --> E["🧠 Claude Vision OCR\nExtracts store · date · items · prices · totals"]
+    CSV --> PARSE["⚙️ CSV parser\nMaps Order ID · items · prices · dates"]
+    E --> F{"🔁 Duplicate check\npHash + SHA-256 fingerprint"}
+    PARSE --> FP{"🔁 Duplicate check\nOrder ID hash"}
+    F -->|"duplicate found"| G["⚠️ Duplicate screen\nDiscard · Keep Both · Merge"]
+    F -->|"unique"| H["🗄️ Saved to PostgreSQL\nreceipts + receipt_items + price_history"]
+    FP -->|"duplicate"| SKIP["⏭ Skipped\nalready imported"]
+    FP -->|"unique"| H
+    G --> H
+    H --> I["📊 Dashboard updated\nSpend totals · category chart · receipt list"]
+    I --> J["🔍 Receipt detail view\nAll line items · edit · delete"]
+
+    style E fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    style F fill:#fef3c7,stroke:#fcd34d,color:#78350f
+    style G fill:#fee2e2,stroke:#fca5a5,color:#7f1d1d
+    style H fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style I fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+    style J fill:#d1fae5,stroke:#6ee7b7,color:#064e3b
+```
+
+### MVP Monthly Cost
+
+| Service | Monthly cost |
+|---|---|
+| EC2 t3.micro | ~$8.47 |
+| RDS db.t3.micro | ~$13.10 |
+| S3 | ~$0.05 |
+| Lambda (OCR) | ~$0.20 |
+| CloudFront | ~$0.30 |
+| Cognito | $0 (free tier) |
+| Secrets Manager | ~$0.80 |
+| Data transfer | ~$0.50 |
+| **AWS subtotal** | **~$23/month** |
+| Claude API (~200 scans) | ~$3–4 |
+| Amazon CSV import | $0 (no API cost — structured data) |
+| **Grand total** | **~$27/month** |
+
+---
+
+## Full Production Architecture (All Phases)
+
 ### Core services
 
 | Service | Purpose |
@@ -56,7 +161,7 @@ A lean founding team of 2–3 strong full-stack engineers can cover these roles 
 - **Vercel** for the Next.js web app — simpler than AWS Amplify, deploys on every merge, integrates with GitHub natively
 - Points to the ECS API via environment variable
 
-### Architecture diagram
+### Full Production Architecture Diagram
 
 ```mermaid
 graph TD
@@ -112,7 +217,7 @@ graph TD
 
 ---
 
-### Workflow diagram
+### Full Production Workflow Diagram
 
 ```mermaid
 flowchart TD

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arr-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .title { font-size: 12px; font-weight: 600; }
+      .sub   { font-size: 9.5px; }
+      .zone  { font-size: 11px; font-weight: 500; }
+      .label { font-size: 9px; fill: #5F5E5A; }
+      .head  { font-size: 13px; font-weight: 600; fill: #2C2C2A; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="760" height="440" fill="#ffffff"/>
+
+  <!-- Page title -->
+  <text class="head" x="380" y="14" text-anchor="middle" dominant-baseline="central">ReceiptIQ MVP — Deployed Infrastructure</text>
+
+  <!-- ── User box (orange) ── -->
+  <rect x="81" y="28" width="200" height="48" rx="8" fill="#FAECE7" stroke="#D85A30" stroke-width="0.75"/>
+  <text class="title" x="181" y="46" text-anchor="middle" dominant-baseline="central" fill="#712B13">User (Web Browser)</text>
+  <text class="sub"   x="181" y="64" text-anchor="middle" dominant-baseline="central" fill="#993C1D">http://54.235.196.79</text>
+
+  <!-- Arrow User → EC2 -->
+  <line x1="181" y1="76" x2="181" y2="132" stroke="#B4B2A9" stroke-width="1" marker-end="url(#arr)"/>
+  <text class="label" x="190" y="108" dominant-baseline="central">HTTP :80</text>
+
+  <!-- AWS Cloud rect -->
+  <rect x="12" y="98" width="568" height="318" rx="12" fill="#F8F7F4" stroke="#B4B2A9" stroke-width="1"/>
+  <text class="zone" x="28" y="113" dominant-baseline="central" fill="#5F5E5A">AWS · us-east-1 · 277623824865</text>
+
+  <!-- ── Application layer zone (purple dashed) ── -->
+  <rect x="20" y="118" width="552" height="120" rx="8" fill="none" stroke="#7F77DD" stroke-width="0.75" stroke-dasharray="6 3"/>
+  <text class="zone" x="26" y="130" dominant-baseline="central" fill="#7F77DD">Application layer</text>
+
+  <!-- EC2 box (purple) -->
+  <rect x="32" y="128" width="296" height="100" rx="8" fill="#EEEDFE" stroke="#7F77DD" stroke-width="0.75"/>
+  <text class="title" x="180" y="148" text-anchor="middle" dominant-baseline="central" fill="#3C3489">EC2 t3.micro</text>
+  <text class="sub"   x="180" y="165" text-anchor="middle" dominant-baseline="central" fill="#534AB7">Next.js 14 App Router · Docker</text>
+  <text class="sub"   x="180" y="180" text-anchor="middle" dominant-baseline="central" fill="#534AB7">NextAuth v5 · Prisma v5 ORM</text>
+  <text class="sub"   x="180" y="195" text-anchor="middle" dominant-baseline="central" fill="#534AB7">Ubuntu 22.04 · Port 80 → 3000</text>
+  <text class="sub"   x="180" y="210" text-anchor="middle" dominant-baseline="central" fill="#534AB7">EIP: 54.235.196.79</text>
+
+  <!-- Arrow EC2 → Lambda -->
+  <line x1="328" y1="178" x2="352" y2="178" stroke="#B4B2A9" stroke-width="1" marker-end="url(#arr)"/>
+  <text class="label" x="330" y="170" dominant-baseline="central">triggers OCR</text>
+
+  <!-- Lambda box (yellow) -->
+  <rect x="356" y="128" width="208" height="100" rx="8" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.75"/>
+  <text class="title" x="460" y="148" text-anchor="middle" dominant-baseline="central" fill="#633806">Lambda: ocr-processor</text>
+  <text class="sub"   x="460" y="165" text-anchor="middle" dominant-baseline="central" fill="#854F0B">nodejs20.x · VPC</text>
+  <text class="sub"   x="460" y="180" text-anchor="middle" dominant-baseline="central" fill="#854F0B">Reads S3 → Claude Vision</text>
+  <text class="sub"   x="460" y="195" text-anchor="middle" dominant-baseline="central" fill="#854F0B">Writes results → RDS</text>
+  <text class="sub"   x="460" y="210" text-anchor="middle" dominant-baseline="central" fill="#854F0B">(needs Anthropic API key)</text>
+
+  <!-- Arrow Lambda → Claude AI (dashed yellow, exits AWS box) -->
+  <line x1="564" y1="178" x2="592" y2="178" stroke="#EF9F27" stroke-width="1" stroke-dasharray="5 3" marker-end="url(#arr-yellow)"/>
+  <text class="label" x="566" y="170" dominant-baseline="central">Vision OCR</text>
+
+  <!-- ── Data layer zone (green dashed) ── -->
+  <rect x="20" y="246" width="552" height="118" rx="8" fill="none" stroke="#1D9E75" stroke-width="0.75" stroke-dasharray="6 3"/>
+  <text class="zone" x="26" y="258" dominant-baseline="central" fill="#1D9E75">Data layer</text>
+
+  <!-- RDS box (green) -->
+  <rect x="32" y="256" width="178" height="98" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.75"/>
+  <text class="title" x="121" y="276" text-anchor="middle" dominant-baseline="central" fill="#085041">RDS PostgreSQL 16.6</text>
+  <text class="sub"   x="121" y="293" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">db.t3.micro · private subnet</text>
+  <text class="sub"   x="121" y="308" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">Users · Receipts · Items</text>
+  <text class="sub"   x="121" y="323" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">PriceHistory · Encrypted</text>
+
+  <!-- S3 box (green) -->
+  <rect x="228" y="256" width="178" height="98" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.75"/>
+  <text class="title" x="317" y="276" text-anchor="middle" dominant-baseline="central" fill="#085041">S3 Bucket</text>
+  <text class="sub"   x="317" y="293" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">receiptiq-receipts-27762382</text>
+  <text class="sub"   x="317" y="308" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">Receipt images · OAC</text>
+  <text class="sub"   x="317" y="323" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">Presigned upload URLs</text>
+
+  <!-- Arrow S3 → CloudFront -->
+  <line x1="406" y1="305" x2="420" y2="305" stroke="#B4B2A9" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- CloudFront box (green) -->
+  <rect x="424" y="256" width="136" height="98" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.75"/>
+  <text class="title" x="492" y="276" text-anchor="middle" dominant-baseline="central" fill="#085041">CloudFront CDN</text>
+  <text class="sub"   x="492" y="293" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">HTTPS image delivery</text>
+  <text class="sub"   x="492" y="308" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">OAC · private access</text>
+  <text class="sub"   x="492" y="323" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">CDN to user browser</text>
+
+  <!-- Infrastructure strip (neutral dashed) -->
+  <rect x="20" y="372" width="552" height="26" rx="6" fill="none" stroke="#888780" stroke-width="0.75" stroke-dasharray="5 3"/>
+  <text class="sub" x="296" y="385" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">Secrets Manager   ·   IAM Roles (EC2 + Lambda)   ·   Elastic IP</text>
+
+  <!-- Connector arrows (neutral, thin) -->
+  <!-- EC2 → RDS vertical -->
+  <line x1="122" y1="228" x2="122" y2="254" stroke="#B4B2A9" stroke-width="0.75" marker-end="url(#arr)"/>
+  <text class="label" x="130" y="241" dominant-baseline="central">Prisma ORM</text>
+
+  <!-- EC2 → S3 diagonal -->
+  <line x1="248" y1="228" x2="298" y2="254" stroke="#B4B2A9" stroke-width="0.75" marker-end="url(#arr)"/>
+  <text class="label" x="248" y="242" dominant-baseline="central">presign upload</text>
+
+  <!-- Lambda → S3 diagonal -->
+  <line x1="418" y1="228" x2="360" y2="254" stroke="#B4B2A9" stroke-width="0.75" marker-end="url(#arr)"/>
+  <text class="label" x="378" y="238" dominant-baseline="central">reads image</text>
+
+  <!-- Claude AI box (yellow, outside AWS rect, right side) -->
+  <rect x="596" y="141" width="152" height="74" rx="8" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.75"/>
+  <text class="title" x="672" y="160" text-anchor="middle" dominant-baseline="central" fill="#633806">Anthropic Claude AI</text>
+  <text class="sub"   x="672" y="177" text-anchor="middle" dominant-baseline="central" fill="#854F0B">Vision OCR · line-item</text>
+  <text class="sub"   x="672" y="192" text-anchor="middle" dominant-baseline="central" fill="#854F0B">extraction</text>
+  <text class="sub"   x="672" y="207" text-anchor="middle" dominant-baseline="central" fill="#854F0B">(external API)</text>
+</svg>

@@ -1856,7 +1856,7 @@ Add to `infrastructure.md`:
 ### Overview
 Give users a way to backfill months or years of purchase history before they started using ReceiptIQ. Without historical data, price trends are thin, inflation comparisons are shallow, and analytics lack context for the first 3–6 months. Eight ingestion methods cover all major sources — from Amazon's official data export to bulk camera roll scanning.
 
-**Roadmap slot:** Phase 3 (bulk scan + Amazon export) · Phase 4B (browser extension portal + email attachments) · Phase 4C (cloud storage + Plaid bank import)
+**Roadmap slot:** **Phase 1 (Amazon CSV — MVP)** · Phase 3 (bulk scan) · Phase 4B (browser extension portal + email attachments) · Phase 4C (cloud storage + Plaid bank import)
 **New UI:** "Import history" onboarding flow — shown to new users on first login
 **Version bump:** v5.0 → v5.1
 
@@ -1866,7 +1866,7 @@ Give users a way to backfill months or years of purchase history before they sta
 
 | Priority | Method | Effort | Coverage | ToS risk | Phase |
 |---|---|---|---|---|---|
-| 1 | Amazon order history CSV import | Low | All Amazon orders, years back | None | 3 |
+| 1 | Amazon order history CSV import | Low | All Amazon orders, years back | None | **1 (MVP)** |
 | 2 | Bulk camera roll / drag-drop upload | Medium | Any paper receipt ever | None | 3 |
 | 3 | Email attachment scan (PDF receipts) | Medium | Any retailer emailing PDF receipts | None | 4B |
 | 4 | Browser extension — retailer portals | Medium | Costco, Walmart, Target order history | Low | 4B |
@@ -2107,8 +2107,11 @@ error_log (text, nullable)
 
 ### 7.12 Features Section Changes
 
+**Phase 1 — Core:** add new feature:
+- **Amazon Order History Import** — Upload your Amazon order history CSV and ReceiptIQ instantly imports all orders as receipts with full line-item detail. No OCR needed — data is already structured. Duplicate detection prevents re-imports.
+
 **Phase 3 — Smart Shopping:** add new feature:
-- **Bulk Historical Import** — Import years of receipt history from Amazon order exports, bulk camera roll scanning, or drag-and-drop PDF upload. Analytics and price trends are meaningful from day one.
+- **Bulk Historical Import** — Bulk camera roll scanning and drag-and-drop PDF upload. Analytics and price trends are meaningful from day one.
 
 **Phase 4 — Advanced:** add new feature:
 - **Full History Backfill** — Connect Google Drive or Dropbox to scan saved receipt PDFs. Import transaction history from bank/credit cards via Plaid. Browser extension pulls Costco, Walmart, and Target order history directly from your account page.
@@ -2127,11 +2130,14 @@ Add to market gap:
 
 ### 7.14 Roadmap Changes
 
+**Phase 1 — Core:** add:
+- Amazon order history CSV import (MVP — synchronous, no queue needed)
+- "Import your history" prompt on first login
+
 **Phase 3 — Smart Shopping:** add:
-- Amazon order history CSV import
 - Bulk camera roll import (mobile)
 - Batch drag-drop upload (web, up to 50 files)
-- "Import your history" onboarding flow
+- Full "Import your history" onboarding flow
 
 **Phase 4B — Bills + Notifications:** add:
 - Email PDF attachment scanner (Gmail + Outlook)

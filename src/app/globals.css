@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ✨ ReceiptIQ — Light & Clean Fintech */
+    --background:   220 33% 97%;      /* #f5f7fc near-white with blue tint */
+    --foreground:   222 47% 11%;      /* #0f172a near-black */
+
+    --card:         0 0% 100%;        /* #ffffff pure white */
+    --card-foreground: 222 47% 11%;
+
+    --popover:      0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary:      224 83% 53%;      /* #2563eb blue-600 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:    213 27% 94%;      /* #edf1f7 light slate */
+    --secondary-foreground: 222 47% 11%;
+
+    --muted:        214 24% 96%;      /* #f1f5f9 slate-100 */
+    --muted-foreground: 215 16% 47%;  /* #64748b slate-500 */
+
+    --accent:       199 89% 49%;      /* #0ea5e9 sky-500 */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:  0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:       214 32% 91%;      /* #e2e8f0 slate-200 */
+    --input:        214 32% 91%;
+    --ring:         224 83% 53%;
+
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Cards get a subtle shadow instead of heavy borders */
+  .card, [class*="rounded"] {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.3); }
+}
