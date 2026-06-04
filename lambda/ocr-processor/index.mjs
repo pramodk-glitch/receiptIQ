@@ -58,6 +58,8 @@ const RECEIPT_PROMPT = `Extract all data from this receipt and return ONLY a JSO
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
 
+quantity: number of units. Many receipts print qty/price on a SEPARATE LINE below the item name as "QTY @ UNIT_PRICE LINE_TOTAL" — the number BEFORE "@" is quantity (not a line number), the number AFTER "@" is unit_price.
+
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
 async function callAnthropic(content) {
