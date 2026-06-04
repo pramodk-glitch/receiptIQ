@@ -12,6 +12,24 @@ import { prisma } from "./db";
 // Key: lowercase store name (partial match is fine — we check via includes).
 // Value: the exact hint text injected into the OCR prompt.
 export const SEEDED_FORMATS: Record<string, string> = {
+  "target": `STORE FORMAT (Target digital receipt):
+Each item section looks like:
+  ITEM NAME
+  Qty N • $X unit price
+  Amount          $X.XX
+  Discounts
+    Target Circle Rewards    -$Y.YY   ← SKIP this line
+    Save $Z promotion        -$Y.YY   ← SKIP this line
+  Taxes & fees
+    Sales tax                $T.TT    ← SKIP this line
+  Item total                 $Z.ZZ   ← USE this as line_total
+
+Rules:
+- Use the unit price from "Qty N • $X unit price" as unit_price.
+- Use "Item total" as line_total (the actual charged amount after discounts).
+- SKIP all Discount lines (negative amounts) and Sales tax lines.
+- Do NOT use "Amount" as the line_total — that is the pre-discount price.`,
+
   "patidar": `STORE FORMAT (Patidar Supermarket):
 Each item is printed as TWO lines:
   Line 1: [item_number] ITEM NAME [: optional size/description]
