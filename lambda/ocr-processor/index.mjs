@@ -58,7 +58,12 @@ const RECEIPT_PROMPT = `Extract all data from this receipt and return ONLY a JSO
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
 
-quantity: number of units. Many receipts print qty/price on a SEPARATE LINE below the item name as "QTY @ UNIT_PRICE LINE_TOTAL" — the number BEFORE "@" is quantity (not a line number), the number AFTER "@" is unit_price.
+quantity/unit_price: Some receipts print an indented "QTY @ UNIT_PRICE LINE_TOTAL" line directly below the item name. That line belongs to the item ABOVE it, not the item below. Example:
+  5 CHINESE BROOM
+              2 @ 4.99   9.98   ← belongs to Chinese Broom (qty=2, price=4.99)
+  6 BLUEBERRIES
+              1 @ 3.99   3.99   ← belongs to Blueberries (qty=1, price=3.99)
+The number BEFORE "@" is quantity (not a line number), the number AFTER "@" is unit_price.
 
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 

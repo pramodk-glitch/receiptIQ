@@ -110,7 +110,15 @@ item_name:
 
 quantity:
 - Number of units purchased (positive number).
-- Many receipts print qty/price on a SEPARATE LINE below the item name, in the format "QTY @ UNIT_PRICE  LINE_TOTAL". The number BEFORE "@" is the quantity — do NOT confuse it with a line/item number.
+- Some receipts print the qty/price on a SEPARATE INDENTED LINE immediately below the item name:
+    5 CHINESE BROOM
+                2 @ 4.99    9.98
+    6 BLUEBERRIES : 1 pint
+                1 @ 3.99    3.99
+  In this layout the indented "QTY @ UNIT_PRICE  LINE_TOTAL" line belongs to the item name DIRECTLY ABOVE it — NOT to the item below it.
+  So "2 @ 4.99  9.98" → Chinese Broom qty=2, unit_price=4.99, line_total=9.98.
+  And "1 @ 3.99  3.99" → Blueberries qty=1, unit_price=3.99, line_total=3.99.
+- The number BEFORE "@" is the quantity. Do NOT treat it as a line/item number.
 - For weight-priced items the quantity is the weight (e.g. 1.43 lbs). Use the decimal weight as-is.
 - Default 1 if not shown.
 
