@@ -27,10 +27,11 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/startup.js ./startup.js
 
 USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
 
-CMD ["sh", "-c", "node_modules/.bin/prisma db push --skip-generate 2>&1 | head -5; node server.js"]
+CMD ["node", "startup.js"]
