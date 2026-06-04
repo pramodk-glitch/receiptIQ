@@ -130,12 +130,21 @@ export function ReceiptUpload() {
       let ocrErrorText: string | null = null;
 
       try {
-        // Send the already-uploaded CloudFront URL — Anthropic fetches it directly,
-        // avoiding re-encoding a potentially large PDF as base64.
+        // For PDFs: send base64 directly — server-side CloudFront download is
+        // unreliable (auth/propagation issues). For images: URL source works fine.
+        let ocrBody: Record<string, string>;
+        if (selectedFile.type === "application/pdf") {
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          ocrBody = { imageBase64: base64, mediaType: selectedFile.type };
+        } else {
+          ocrBody = { imageUrl, mediaType: selectedFile.type };
+        }
+
         const ocrRes = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl, mediaType: selectedFile.type }),
+          body: JSON.stringify(ocrBody),
         });
         if (ocrRes.ok) {
           ocrData = await ocrRes.json();

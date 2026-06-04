@@ -131,7 +131,7 @@ function validateOcrResult(data: unknown): OcrResult {
   return result;
 }
 
-const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
+export const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
 
@@ -229,14 +229,32 @@ export async function extractReceiptFromImage(
 }
 
 export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResult> {
-  // Use fetch directly — SDK v0.27 silently drops document blocks.
+  return extractReceiptFromPdfWithPrompt(pdfBuffer, RECEIPT_PROMPT);
+}
+
+export async function extractReceiptFromPdfWithPrompt(pdfBuffer: Buffer, prompt: string): Promise<OcrResult> {
   const base64Pdf = pdfBuffer.toString("base64");
   const content = [
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
-    { type: "text", text: RECEIPT_PROMPT },
+    { type: "text", text: prompt },
   ];
   const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, true);
   return parseClaudeResponse(text);
+}
+
+export async function identifyStoreFromBuffer(pdfBuffer: Buffer): Promise<string> {
+  try {
+    const base64Pdf = pdfBuffer.toString("base64");
+    const storePrompt = "Identify the store or business from this receipt. Look for store name text, logos, or branding (e.g. Target's red bullseye). Reply with ONLY the store name. If unknown, reply 'Unknown'.";
+    const content = [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
+      { type: "text", text: storePrompt },
+    ];
+    const name = await callAnthropicApi("claude-haiku-4-5", 50, content, true);
+    return name.trim() || "Unknown";
+  } catch {
+    return "Unknown";
+  }
 }
 
 /** Shared fetch-based caller — avoids SDK document-block drop bug for PDFs */

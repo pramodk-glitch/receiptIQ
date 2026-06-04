@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { extractReceiptFromImage, extractReceiptFromPdf, extractReceiptFromUrl, identifyStore, getMediaType } from "@/lib/claude";
+import { extractReceiptFromImage, extractReceiptFromUrl, identifyStore, identifyStoreFromBuffer, extractReceiptFromPdfWithPrompt, getMediaType, RECEIPT_PROMPT } from "@/lib/claude";
 import { getFormatHints, saveFormatHints, buildTwoLineHint } from "@/lib/store-formats";
 import type { OcrResult } from "@/lib/claude";
 
@@ -29,17 +29,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "mediaType is required" }, { status: 400 });
     }
 
-    // ── Non-URL path (base64) — no format-learning for now ───────────────────
+    // ── Base64 path ───────────────────────────────────────────────────────────
     if (!imageUrl) {
       if (!imageBase64) {
         return NextResponse.json({ error: "imageBase64 or imageUrl is required" }, { status: 400 });
       }
       const buffer = Buffer.from(imageBase64, "base64");
-      const result =
-        mediaType === "application/pdf"
-          ? await extractReceiptFromPdf(buffer)
-          : await extractReceiptFromImage(buffer, getMediaType(mediaType));
-      return NextResponse.json(result);
+
+      if (mediaType !== "application/pdf") {
+        const result = await extractReceiptFromImage(buffer, getMediaType(mediaType));
+        return NextResponse.json(result);
+      }
+
+      // PDF base64: run through format registry just like the URL path
+      // Step 1: identify store from the PDF bytes
+      const storeName = await identifyStoreFromBuffer(buffer);
+      console.log(`[OCR] PDF base64 — identified store: "${storeName}"`);
+
+      // Step 2: look up format hints
+      const formatHints = await getFormatHints(storeName);
+
+      // Step 3: OCR with hints
+      const prompt = formatHints
+        ? `${formatHints}\n\n---\n\n${RECEIPT_PROMPT}`
+        : RECEIPT_PROMPT;
+      let result = await extractReceiptFromPdfWithPrompt(buffer, prompt);
+
+      // Step 4: retry with two-line hint if math fails
+      const passRate = mathPassRate(result);
+      if (passRate < 0.6 && !formatHints && result.items.length > 0) {
+        const fallbackHint = buildTwoLineHint(storeName);
+        const retryResult = await extractReceiptFromPdfWithPrompt(buffer, fallbackHint + "\n\n---\n\n" + RECEIPT_PROMPT);
+        if (mathPassRate(retryResult) > passRate) {
+          result = retryResult;
+          if (storeName !== "Unknown") await saveFormatHints(storeName, fallbackHint);
+        }
+      }
+
+      if (result.items.length === 0) {
+        return NextResponse.json(
+          { error: "NO_ITEMS", message: "No line items found in this PDF. Please upload the full itemised receipt.", storeName, total_amount: result.total_amount },
+          { status: 422 },
+        );
+      }
+
+      if (passRate >= 0.8 && storeName !== "Unknown") {
+        await saveFormatHints(storeName, formatHints ?? "standard");
+      }
+
+      return NextResponse.json({ ...result, _storeName: storeName });
     }
 
     // ── URL path — full format-registry flow ──────────────────────────────────
