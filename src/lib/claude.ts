@@ -44,6 +44,27 @@ function normalizeCategory(raw: string): string {
   return found ?? "General";
 }
 
+function normalizeDate(raw: unknown): string {
+  const today = new Date().toISOString().split("T")[0];
+  if (typeof raw !== "string" || !raw.trim()) return today;
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return raw.trim();
+
+  // DD/MM/YYYY or DD-MM-YYYY (common on Indian receipts)
+  const dmy = raw.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmy) {
+    const yr = dmy[3].length === 2 ? "20" + dmy[3] : dmy[3];
+    return `${yr}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  }
+
+  // MM/DD/YYYY or other formats — let Date parse it
+  const d = new Date(raw.trim());
+  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+
+  return today;
+}
+
 function validateOcrResult(data: unknown): OcrResult {
   if (typeof data !== "object" || data === null) {
     throw new Error("OCR result is not an object");
@@ -54,10 +75,7 @@ function validateOcrResult(data: unknown): OcrResult {
   const result: OcrResult = {
     store_name: typeof obj.store_name === "string" ? obj.store_name : "Unknown Store",
     store_chain: typeof obj.store_chain === "string" ? obj.store_chain : "",
-    receipt_date:
-      typeof obj.receipt_date === "string"
-        ? obj.receipt_date
-        : new Date().toISOString().split("T")[0],
+    receipt_date: normalizeDate(obj.receipt_date),
     total_amount: typeof obj.total_amount === "number" ? obj.total_amount : 0,
     currency: typeof obj.currency === "string" ? obj.currency : "USD",
     items: [],
