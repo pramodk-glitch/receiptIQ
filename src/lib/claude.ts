@@ -304,9 +304,10 @@ export async function extractReceiptFromUrl(
 export async function identifyStore(url: string, mediaType: string): Promise<string> {
   try {
     const isPdf = mediaType === "application/pdf";
+    const storePrompt = "Identify the store or business from this receipt image. Look for store name text, logos, or branding (e.g. Target's red bullseye, Walmart's spark, Costco's logo). Reply with ONLY the store name (e.g. 'Target', 'Walmart', 'Patidar Supermarket'). If unknown, reply 'Unknown'.";
     const content: unknown[] = isPdf
-      ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: "What is the store or business name shown on this receipt? Reply with ONLY the store name, nothing else. If unknown, reply 'Unknown'." }]
-      : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: "What is the store or business name shown on this receipt? Reply with ONLY the store name, nothing else. If unknown, reply 'Unknown'." }];
+      ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: storePrompt }]
+      : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: storePrompt }];
 
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",

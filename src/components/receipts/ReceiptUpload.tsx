@@ -141,6 +141,10 @@ export function ReceiptUpload() {
           ocrData = await ocrRes.json();
         } else {
           const errBody = await ocrRes.json().catch(() => ({ error: "Unknown OCR error" }));
+          // 422 = receipt summary image with no line items — surface a clear message
+          if (ocrRes.status === 422 && errBody.error === "NO_ITEMS") {
+            throw new Error(errBody.message ?? "This image has no line items. Please upload the full itemised receipt.");
+          }
           ocrErrorText = errBody.error;
           console.error("[ReceiptIQ] OCR failed:", ocrErrorText);
         }

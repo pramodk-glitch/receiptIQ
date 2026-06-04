@@ -59,6 +59,22 @@ export async function POST(request: NextRequest) {
     const passRate = mathPassRate(result);
     console.log(`[OCR] Math pass rate: ${Math.round(passRate * 100)}% (${result.items.length} items)`);
 
+    // Guard: if no items found, this is likely a receipt summary/confirmation
+    // screen rather than a full itemised receipt.
+    if (result.items.length === 0) {
+      return NextResponse.json(
+        {
+          error: "NO_ITEMS",
+          message:
+            `This image appears to be a receipt summary (store: ${storeName}, total: ${result.total_amount}). ` +
+            "Please upload the full receipt image that shows the individual line items.",
+          storeName,
+          total_amount: result.total_amount,
+        },
+        { status: 422 },
+      );
+    }
+
     // Step 4: If math fails AND no hints were used, retry with generic two-line hint
     if (passRate < 0.6 && !formatHints && result.items.length > 0) {
       console.log(`[OCR] Math check failed — retrying with two-line format hint`);
