@@ -11,7 +11,7 @@ import { writeFileSync, readFileSync, readdirSync, mkdtempSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-const MAX_SECTION_HEIGHT = 3500; // px — safe for Claude Vision
+const MAX_SECTION_HEIGHT = 4000; // px — Claude Vision max is 8000px per dimension
 
 export async function pdfToImages(pdfBuffer: Buffer): Promise<Buffer[]> {
   const tmpDir = mkdtempSync(join(tmpdir(), "riq-pdf-"));
@@ -88,8 +88,10 @@ async function splitTallImage(imageBuffer: Buffer, tmpDir: string): Promise<Buff
       y += sectionH;
     }
     return sections;
-  } catch {
-    // ImageMagick not available — return image as-is
-    return [imageBuffer];
+  } catch (e) {
+    // ImageMagick not available or failed — log and re-throw so caller knows
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[splitTallImage] failed (ImageMagick required): ${msg}`);
+    throw new Error(`Image splitting failed — imagemagick may not be installed: ${msg}`);
   }
 }
