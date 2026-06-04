@@ -160,7 +160,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: receipt.id }, { status: 201 });
   } catch (err) {
-    console.error("Create receipt error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const detail = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    console.error("Create receipt error:", detail);
+    return NextResponse.json({ error: "Internal server error", detail: detail.substring(0, 300) }, { status: 500 });
   }
 }
