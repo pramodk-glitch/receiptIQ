@@ -277,12 +277,23 @@ export async function extractReceiptFromUrl(
     : RECEIPT_PROMPT;
 
   const isPdf = mediaType === "application/pdf";
-  // Use fetch directly for ALL URL calls — the SDK silently drops document
-  // blocks (both base64 and URL-sourced), causing empty responses for PDFs.
-  const content = isPdf
-    ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: prompt }]
-    : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: prompt }];
 
+  if (isPdf) {
+    // Anthropic does not support PDF URL sources — download and send as base64.
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch PDF from URL: ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const content = [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+      { type: "text", text: prompt },
+    ];
+    const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
+    return parseClaudeResponse(text);
+  }
+
+  // Images: URL source works fine
+  const content = [{ type: "image", source: { type: "url", url } }, { type: "text", text: prompt }];
   const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
   return parseClaudeResponse(text);
 }
@@ -295,9 +306,19 @@ export async function identifyStore(url: string, mediaType: string): Promise<str
   try {
     const isPdf = mediaType === "application/pdf";
     const storePrompt = "Identify the store or business from this receipt image. Look for store name text, logos, or branding (e.g. Target's red bullseye, Walmart's spark, Costco's logo). Reply with ONLY the store name (e.g. 'Target', 'Walmart', 'Patidar Supermarket'). If unknown, reply 'Unknown'.";
-    const content = isPdf
-      ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: storePrompt }]
-      : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: storePrompt }];
+
+    let content: unknown[];
+    if (isPdf) {
+      // PDF URL source not supported — download and send as base64
+      const res = await fetch(url);
+      const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+      content = [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+        { type: "text", text: storePrompt },
+      ];
+    } else {
+      content = [{ type: "image", source: { type: "url", url } }, { type: "text", text: storePrompt }];
+    }
 
     const name = await callAnthropicApi("claude-haiku-4-5", 30, content);
     return name.trim() || "Unknown";
