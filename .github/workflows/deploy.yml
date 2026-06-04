@@ -182,6 +182,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-lambda, deploy]
     if: always()
+    permissions:
+      contents: write
 
     steps:
       - name: Post commit comment
