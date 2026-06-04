@@ -134,8 +134,15 @@ export function ReceiptUpload() {
         // unreliable (auth/propagation issues). For images: URL source works fine.
         let ocrBody: Record<string, string>;
         if (selectedFile.type === "application/pdf") {
-          const arrayBuffer = await selectedFile.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              resolve(dataUrl.split(",")[1]); // strip "data:application/pdf;base64,"
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedFile);
+          });
           ocrBody = { imageBase64: base64, mediaType: selectedFile.type };
         } else {
           ocrBody = { imageUrl, mediaType: selectedFile.type };
