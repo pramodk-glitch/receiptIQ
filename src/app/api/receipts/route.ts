@@ -115,28 +115,43 @@ export async function POST(request: NextRequest) {
       });
 
       if (items.length > 0) {
-        await tx.receiptItem.createMany({
-          data: items.map((item: {
-            itemName: string;
-            quantity?: number;
-            unitPrice: number;
-            lineTotal?: number;
-            category?: string;
-            brand?: string;
-            unit?: string;
-          }) => ({
-            receiptId: newReceipt.id,
+        const itemRows = items.map((item: {
+          itemName: string;
+          quantity?: number;
+          unitPrice: number;
+          lineTotal?: number;
+          category?: string;
+          brand?: string;
+          unit?: string;
+        }) => ({
+          receiptId: newReceipt.id,
+          userId: session.user.id!,
+          itemName: String(item.itemName),
+          itemNameNormalized: String(item.itemName).toLowerCase().trim(),
+          quantity: Number(item.quantity ?? 1),
+          unitPrice: Number(item.unitPrice),
+          lineTotal: Number(item.lineTotal ?? item.unitPrice * (item.quantity ?? 1)),
+          category: String(item.category ?? "General"),
+          brand: item.brand ? String(item.brand) : null,
+          unit: item.unit ? String(item.unit) : null,
+        }));
+
+        await tx.receiptItem.createMany({ data: itemRows });
+
+        // Populate PriceHistory for price intelligence
+        const priceRows = itemRows
+          .filter((i) => i.unitPrice > 0 && storeChain)
+          .map((i) => ({
             userId: session.user.id!,
-            itemName: String(item.itemName),
-            itemNameNormalized: String(item.itemName).toLowerCase().trim(),
-            quantity: Number(item.quantity ?? 1),
-            unitPrice: Number(item.unitPrice),
-            lineTotal: Number(item.lineTotal ?? item.unitPrice * (item.quantity ?? 1)),
-            category: String(item.category ?? "General"),
-            brand: item.brand ? String(item.brand) : null,
-            unit: item.unit ? String(item.unit) : null,
-          })),
-        });
+            itemNameNormalized: i.itemNameNormalized,
+            storeChain: String(storeChain),
+            unitPrice: i.unitPrice,
+            category: i.category,
+          }));
+
+        if (priceRows.length > 0) {
+          await tx.priceHistory.createMany({ data: priceRows });
+        }
       }
 
       return newReceipt;

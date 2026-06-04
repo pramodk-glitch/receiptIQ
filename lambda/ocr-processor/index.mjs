@@ -210,9 +210,9 @@ async function insertItems(db, receiptId, userId, ocrResult) {
 
     if (item.unit_price > 0) {
       await db.query(
-        `INSERT INTO "PriceHistory" (id, "itemNameNormalized", "storeChain", "unitPrice", "capturedAt", source, "userId")
-         VALUES (gen_random_uuid(), $1, $2, $3, NOW(), 'receipt', $4)`,
-        [item.item_name.toLowerCase().trim(), ocrResult.store_chain || ocrResult.store_name, item.unit_price, userId]
+        `INSERT INTO "PriceHistory" (id, "itemNameNormalized", "storeChain", "unitPrice", category, "capturedAt", source, "userId")
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), 'receipt', $5)`,
+        [item.item_name.toLowerCase().trim(), ocrResult.store_chain || ocrResult.store_name, item.unit_price, item.category || 'General', userId]
       );
     }
   }

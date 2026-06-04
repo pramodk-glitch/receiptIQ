@@ -2,8 +2,9 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PriceTrendChart } from "@/components/price-intel/PriceTrendChart";
-import { StoreComparisonTable } from "@/components/price-intel/StoreComparisonTable";
 import { PriceAlertCard } from "@/components/price-intel/PriceAlertCard";
+import { PriceCategoryTree } from "@/components/price-intel/PriceCategoryTree";
+import type { CategoryGroup } from "@/app/api/price-history/by-category/route";
 
 async function getTopItems(userId: string): Promise<string[]> {
   const rows = await prisma.$queryRaw<Array<{ itemNameNormalized: string }>>`
@@ -12,94 +13,9 @@ async function getTopItems(userId: string): Promise<string[]> {
     WHERE "userId" = ${userId} AND "unitPrice" > 0
     GROUP BY "itemNameNormalized"
     ORDER BY COUNT(*) DESC
-    LIMIT 50
+    LIMIT 200
   `;
   return rows.map((r) => r.itemNameNormalized);
-}
-
-async function getStoreComparison(userId: string) {
-  const rows = await prisma.$queryRaw<
-    Array<{
-      itemNameNormalized: string;
-      storeChain: string;
-      avgPrice: number;
-      minPrice: number;
-      purchases: number;
-    }>
-  >`
-    WITH item_store AS (
-      SELECT
-        "itemNameNormalized",
-        "storeChain",
-        CAST(AVG("unitPrice") AS float) AS "avgPrice",
-        CAST(MIN("unitPrice") AS float) AS "minPrice",
-        COUNT(*)::int AS purchases
-      FROM "PriceHistory"
-      WHERE "userId" = ${userId}
-        AND "capturedAt" >= NOW() - INTERVAL '12 months'
-        AND "storeChain" != ''
-        AND "unitPrice" > 0
-      GROUP BY "itemNameNormalized", "storeChain"
-    ),
-    multi_store_items AS (
-      SELECT "itemNameNormalized"
-      FROM item_store
-      GROUP BY "itemNameNormalized"
-      HAVING COUNT(DISTINCT "storeChain") >= 2
-    )
-    SELECT s.*
-    FROM item_store s
-    JOIN multi_store_items m USING ("itemNameNormalized")
-    ORDER BY "itemNameNormalized", "avgPrice" ASC
-    LIMIT 300
-  `;
-
-  const byItem: Record<
-    string,
-    {
-      itemNameNormalized: string;
-      stores: Array<{
-        storeChain: string;
-        avgPrice: number;
-        minPrice: number;
-        purchases: number;
-        isCheapest: boolean;
-      }>;
-      savings: number;
-    }
-  > = {};
-
-  for (const row of rows) {
-    if (!byItem[row.itemNameNormalized]) {
-      byItem[row.itemNameNormalized] = {
-        itemNameNormalized: row.itemNameNormalized,
-        stores: [],
-        savings: 0,
-      };
-    }
-    byItem[row.itemNameNormalized].stores.push({
-      storeChain: row.storeChain,
-      avgPrice: Number(row.avgPrice),
-      minPrice: Number(row.minPrice),
-      purchases: Number(row.purchases),
-      isCheapest: false,
-    });
-  }
-
-  const result = Object.values(byItem).map((item) => {
-    const sorted = [...item.stores].sort((a, b) => a.avgPrice - b.avgPrice);
-    sorted[0].isCheapest = true;
-    const cheapest = sorted[0].avgPrice;
-    const mostExpensive = sorted[sorted.length - 1].avgPrice;
-    return {
-      ...item,
-      stores: sorted,
-      savings: Number((mostExpensive - cheapest).toFixed(2)),
-    };
-  });
-
-  result.sort((a, b) => b.savings - a.savings);
-  return result.slice(0, 30);
 }
 
 async function getAnomalies(userId: string) {
@@ -158,41 +74,145 @@ async function getAnomalies(userId: string) {
   }));
 }
 
+async function getCategoryTree(userId: string): Promise<CategoryGroup[]> {
+  const rows = await prisma.$queryRaw<Array<{
+    itemNameNormalized: string;
+    category: string;
+    storeChain: string;
+    avgPrice: number;
+    minPrice: number;
+    purchases: number;
+  }>>`
+    WITH ph AS (
+      SELECT
+        ph."itemNameNormalized",
+        COALESCE(
+          NULLIF(ph.category, 'General'),
+          (
+            SELECT ri.category
+            FROM "ReceiptItem" ri
+            WHERE ri."userId" = ph."userId"
+              AND ri."itemNameNormalized" = ph."itemNameNormalized"
+            ORDER BY ri."createdAt" DESC
+            LIMIT 1
+          ),
+          'General'
+        ) AS category,
+        ph."storeChain",
+        ph."unitPrice"
+      FROM "PriceHistory" ph
+      WHERE ph."userId" = ${userId}
+        AND ph."unitPrice" > 0
+        AND ph."storeChain" != ''
+    )
+    SELECT
+      "itemNameNormalized",
+      category,
+      "storeChain",
+      CAST(AVG("unitPrice") AS float) AS "avgPrice",
+      CAST(MIN("unitPrice") AS float) AS "minPrice",
+      COUNT(*)::int AS purchases
+    FROM ph
+    GROUP BY "itemNameNormalized", category, "storeChain"
+    ORDER BY category, "itemNameNormalized", "avgPrice" ASC
+  `;
+
+  const byCategory: Record<string, Record<string, {
+    itemNameNormalized: string; category: string;
+    stores: Array<{ storeChain: string; avgPrice: number; minPrice: number; purchases: number; isCheapest: boolean }>;
+    bestPrice: number; multiStore: boolean;
+  }>> = {};
+
+  for (const row of rows) {
+    const cat = row.category || "General";
+    if (!byCategory[cat]) byCategory[cat] = {};
+    if (!byCategory[cat][row.itemNameNormalized]) {
+      byCategory[cat][row.itemNameNormalized] = {
+        itemNameNormalized: row.itemNameNormalized, category: cat,
+        stores: [], bestPrice: 0, multiStore: false,
+      };
+    }
+    byCategory[cat][row.itemNameNormalized].stores.push({
+      storeChain: row.storeChain,
+      avgPrice: Number(row.avgPrice), minPrice: Number(row.minPrice),
+      purchases: Number(row.purchases), isCheapest: false,
+    });
+  }
+
+  const categoryOrder = [
+    "Groceries", "Household", "Personal Care", "Medicine",
+    "Electronics", "Dining", "Travel", "Entertainment", "General",
+  ];
+
+  const result: CategoryGroup[] = [];
+  for (const cat of [...categoryOrder, ...Object.keys(byCategory).filter(c => !categoryOrder.includes(c))]) {
+    if (!byCategory[cat]) continue;
+    const items = Object.values(byCategory[cat]).map((item) => {
+      const sorted = [...item.stores].sort((a, b) => a.avgPrice - b.avgPrice);
+      sorted[0].isCheapest = true;
+      return { ...item, stores: sorted, bestPrice: sorted[0].avgPrice, multiStore: sorted.length > 1 };
+    });
+    items.sort((a, b) => {
+      if (a.multiStore !== b.multiStore) return a.multiStore ? -1 : 1;
+      return a.itemNameNormalized.localeCompare(b.itemNameNormalized);
+    });
+    result.push({ category: cat, items });
+  }
+  return result;
+}
+
 export default async function PriceComparePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const [topItems, storeComparison, anomalies] = await Promise.all([
+  const [topItems, anomalies, categoryTree] = await Promise.all([
     getTopItems(userId),
-    getStoreComparison(userId),
     getAnomalies(userId),
+    getCategoryTree(userId),
   ]);
+
+  const totalItems = categoryTree.reduce((s, g) => s + g.items.length, 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Price Intelligence</h1>
         <p className="text-slate-500 mt-1">
-          Track price trends, find the cheapest stores, and spot unusual price spikes — powered by TimescaleDB.
+          Track price trends, find the cheapest stores, and spot unusual price spikes.
         </p>
       </div>
 
       {/* Price Alerts */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
-          <h2 className="text-lg font-semibold text-slate-800">Price Spike Alerts</h2>
-          {anomalies.length > 0 && (
+      {anomalies.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <h2 className="text-lg font-semibold text-slate-800">Price Spike Alerts</h2>
             <span className="ml-auto text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
               {anomalies.length} alert{anomalies.length !== 1 ? "s" : ""}
             </span>
+          </div>
+          <PriceAlertCard anomalies={anomalies} />
+        </div>
+      )}
+
+      {/* Category Tree */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+          <h2 className="text-lg font-semibold text-slate-800">All Items by Category</h2>
+          {totalItems > 0 && (
+            <span className="ml-auto text-xs text-slate-400">{totalItems} items tracked</span>
           )}
         </div>
-        <PriceAlertCard anomalies={anomalies} />
+        <PriceCategoryTree data={categoryTree} />
       </div>
 
       {/* Price Trend Chart */}
@@ -209,19 +229,6 @@ export default async function PriceComparePage() {
           <PriceTrendChart topItems={topItems} />
         </div>
       )}
-
-      {/* Store Comparison */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          <h2 className="text-lg font-semibold text-slate-800">Cheapest Store by Item</h2>
-          <span className="ml-auto text-xs text-slate-400">Items purchased from 2+ stores</span>
-        </div>
-        <StoreComparisonTable data={storeComparison} />
-      </div>
     </div>
   );
 }

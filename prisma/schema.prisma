@@ -68,9 +68,11 @@ model PriceHistory {
   storeChain         String
   unitPrice          Float
   unit               String?
+  category           String   @default("General")
   capturedAt         DateTime @default(now())
   source             String   @default("receipt")
   userId             String
 
   @@index([userId, itemNameNormalized])
+  @@index([userId, category])
 }
