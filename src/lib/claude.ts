@@ -82,32 +82,50 @@ function validateOcrResult(data: unknown): OcrResult {
   };
 
   if (Array.isArray(obj.items)) {
-    result.items = obj.items
+    type RawItem = { item_name: string; quantity: number; unit_price: number; line_total: number; category: string };
+
+    const raw: RawItem[] = obj.items
       .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-      .map((item) => {
-        const quantity   = typeof item.quantity   === "number" ? item.quantity   : 1;
-        const unit_price = typeof item.unit_price === "number" ? item.unit_price : 0;
-        const line_total = typeof item.line_total === "number" ? item.line_total : 0;
+      .map((item) => ({
+        item_name:  typeof item.item_name  === "string" ? item.item_name  : "Unknown Item",
+        quantity:   typeof item.quantity   === "number" ? item.quantity   : 1,
+        unit_price: typeof item.unit_price === "number" ? item.unit_price : 0,
+        line_total: typeof item.line_total === "number" ? item.line_total : 0,
+        category:   normalizeCategory(typeof item.category === "string" ? item.category : "General"),
+      }));
 
-        // Sanity-check: qty × unit_price should equal line_total (within $0.02).
-        // If not, infer the missing value from the other two.
-        let q = quantity, u = unit_price, t = line_total;
-        if (u > 0 && t > 0 && Math.abs(q * u - t) > 0.02) {
-          // Try to recover quantity from total / unit_price
-          const inferredQty = Math.round(t / u);
-          if (inferredQty > 0 && Math.abs(inferredQty * u - t) <= 0.02) {
-            q = inferredQty;
-          }
-        }
+    // Detect the "price line shifted by one" pattern:
+    // If >half the items have qty×price ≠ line_total but shifting prices one
+    // position earlier fixes them, apply the shift.
+    const mathOk = (item: RawItem) =>
+      item.unit_price > 0 && item.line_total > 0 &&
+      Math.abs(item.quantity * item.unit_price - item.line_total) <= 0.02;
 
-        return {
-          item_name: typeof item.item_name === "string" ? item.item_name : "Unknown Item",
-          quantity:   q,
-          unit_price: u,
-          line_total: t,
-          category: normalizeCategory(typeof item.category === "string" ? item.category : "General"),
-        };
+    const badCount  = raw.filter(i => !mathOk(i)).length;
+    const threshold = Math.ceil(raw.length / 2);
+
+    if (badCount >= threshold && raw.length >= 2) {
+      // Build shifted candidate: item[i] keeps its name but gets item[i+1]'s price fields
+      const shifted = raw.map((item, i) => {
+        const priceSource = raw[i + 1] ?? raw[i];
+        return { ...item, quantity: priceSource.quantity, unit_price: priceSource.unit_price, line_total: priceSource.line_total };
       });
+      const shiftedBad = shifted.filter(i => !mathOk(i)).length;
+      if (shiftedBad < badCount) {
+        result.items = shifted;
+        return result;
+      }
+    }
+
+    // Per-item fallback: if individual qty×price is wrong, infer qty from total/price
+    result.items = raw.map((item) => {
+      let { quantity: q, unit_price: u, line_total: t } = item;
+      if (u > 0 && t > 0 && Math.abs(q * u - t) > 0.02) {
+        const inferred = Math.round(t / u);
+        if (inferred > 0 && Math.abs(inferred * u - t) <= 0.02) q = inferred;
+      }
+      return { ...item, quantity: q };
+    });
   }
 
   return result;
@@ -117,51 +135,28 @@ const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return
 
 {"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
 
-Follow these rules exactly:
+STEP 1 — Read each item number (1, 2, 3 …) printed on the left. Each number marks the start of one purchased item.
 
-item_name:
-- Product name only — title case, clean English.
-- Many receipts print a line number before the name (e.g. "5 CHINESE BROOM" or "12 BANANA BUNCH"). Do NOT include that number in the name.
-- Strip any trailing store codes, department tags, or short numeric/dash suffixes that are not meaningful product words (e.g. "BROOM -2" → "Chinese Broom", "RICE 047" → "Rice").
-- Size or variety information that is part of the product name is fine to keep (e.g. "Pringles Ranch 140g").
+STEP 2 — For each item number N, the price information (QTY @ UNIT_PRICE  LINE_TOTAL) is printed on the very next line, indented, BEFORE item number N+1 appears. That price line belongs to item N — NOT to item N+1.
 
-quantity:
-- Number of units purchased (positive number).
-- The number BEFORE "@" is the quantity. Do NOT treat it as a line/item number.
-- For weight-priced items the quantity is the weight (e.g. 1.43 lbs). Use the decimal weight as-is.
-- Default 1 if not shown.
+STEP 3 — Verify every item: round(quantity × unit_price, 2) = line_total. If the math fails, you matched the wrong price line — go back and fix it.
 
-unit_price:
-- Price for one unit or one lb/kg (positive number).
-- In the format "QTY @ UNIT_PRICE  LINE_TOTAL", the number AFTER "@" is the unit_price.
-- Never negative.
+item_name rules:
+- Title case, clean English product name.
+- Strip the leading item number (e.g. "5 CHINESE BROOM" → "Chinese Broom").
+- Strip trailing store codes or meaningless suffixes.
+- Keep size/variety info that is part of the name.
 
-CRITICAL — math validation:
-After extracting every item, verify: round(quantity × unit_price, 2) must equal line_total.
-If they do not match, you have misattributed the price line. Fix it before returning.
-Example of correct attribution in a two-line-per-item layout:
-  4 LAXMI IDLY RICE 20LB
-                  1 @ 23.99   23.99   ← qty=1, unit=23.99, total=23.99  ✓ (1×23.99=23.99)
-  5 CHINESE BROOM
-                  2 @ 4.99     9.98   ← qty=2, unit=4.99,  total=9.98   ✓ (2×4.99=9.98)
-  6 BLUEBERRIES 1 PINT
-                  1 @ 3.99     3.99   ← qty=1, unit=3.99,  total=3.99   ✓ (1×3.99=3.99)
-Each indented price line belongs to the item name IMMEDIATELY ABOVE it.
+quantity: the number printed BEFORE "@" on the price line. Never the item number.
+unit_price: the number printed AFTER "@" on the price line.
+line_total: the rightmost dollar amount on the price line.
 
-line_total:
-- The actual charged amount for that item (positive number).
-- On receipts using "QTY @ UNIT_PRICE  LINE_TOTAL", take the rightmost number as line_total.
+For weight-priced items (e.g. "1.43 @ 2.99/lb") quantity is the weight as a decimal.
 
-SKIP these lines — do not create items for them:
-- "You Saved", "Regular Price", "Savings", discount, or coupon lines
-- Any line whose dollar amount is negative
-- Tax, fee, subtotal, total, balance, change, cash, or card payment lines
-- Loyalty points, rewards, or receipt footer text
+SKIP: discount/savings lines, negative amounts, tax, subtotal, total, payment, loyalty points.
 
-total_amount: The grand total actually charged (after tax).
-
-N or T printed after a price means non-taxable / taxable — ignore it.
-
+total_amount: grand total charged after tax.
+N or T after a price = non-taxable / taxable — ignore.
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
 function parseClaudeResponse(responseText: string): OcrResult {
