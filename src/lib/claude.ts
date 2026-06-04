@@ -235,7 +235,7 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
     { type: "text", text: RECEIPT_PROMPT },
   ];
-  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, true);
   return parseClaudeResponse(text);
 }
 
@@ -244,17 +244,26 @@ async function callAnthropicApi(
   model: string,
   max_tokens: number,
   content: unknown[],
+  isPdf = false,
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+
+  // PDF support requires the beta header — without it the document block is
+  // silently dropped and Claude hallucinates a receipt from nothing.
+  if (isPdf) {
+    headers["anthropic-beta"] = "pdfs-2024-09-25";
+  }
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers,
     body: JSON.stringify({ model, max_tokens, messages: [{ role: "user", content }] }),
   });
 
@@ -288,13 +297,13 @@ export async function extractReceiptFromUrl(
       { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
       { type: "text", text: prompt },
     ];
-    const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
+    const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, true);
     return parseClaudeResponse(text);
   }
 
-  // Images: URL source works fine
+  // Images: URL source works fine, no beta header needed
   const content = [{ type: "image", source: { type: "url", url } }, { type: "text", text: prompt }];
-  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content);
+  const text = await callAnthropicApi("claude-sonnet-4-6", 8192, content, false);
   return parseClaudeResponse(text);
 }
 
@@ -320,7 +329,7 @@ export async function identifyStore(url: string, mediaType: string): Promise<str
       content = [{ type: "image", source: { type: "url", url } }, { type: "text", text: storePrompt }];
     }
 
-    const name = await callAnthropicApi("claude-haiku-4-5", 30, content);
+    const name = await callAnthropicApi("claude-haiku-4-5", 30, content, isPdf);
     return name.trim() || "Unknown";
   } catch {
     return "Unknown"; // non-fatal — OCR proceeds without hints
