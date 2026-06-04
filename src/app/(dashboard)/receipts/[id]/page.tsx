@@ -82,11 +82,29 @@ export default async function ReceiptDetailPage({
             <CardTitle className="text-base">Receipt Image</CardTitle>
           </CardHeader>
           <CardContent>
-            <img
-              src={receipt.imageUrl}
-              alt={`Receipt from ${receipt.storeName}`}
-              className="w-full max-h-96 object-contain rounded-lg border border-slate-200"
-            />
+            {receipt.imageUrl.toLowerCase().endsWith(".pdf") ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-8 rounded-lg border border-slate-200 bg-slate-50">
+                <svg className="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 3v6h6" />
+                </svg>
+                <p className="text-sm font-medium text-slate-600">PDF Receipt</p>
+                <a
+                  href={receipt.imageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-indigo-600 hover:underline"
+                >
+                  Open PDF ↗
+                </a>
+              </div>
+            ) : (
+              <img
+                src={receipt.imageUrl}
+                alt={`Receipt from ${receipt.storeName}`}
+                className="w-full max-h-96 object-contain rounded-lg border border-slate-200"
+              />
+            )}
           </CardContent>
         </Card>
       )}
