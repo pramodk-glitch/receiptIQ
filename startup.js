@@ -50,8 +50,21 @@ async function main() {
     console.error("Schema push warning (non-fatal):", e.message);
   }
 
-  // ── 3. Backfill categories ───────────────────────────────────────────────
+  // ── 2b. Ensure PriceHistory.category column exists (idempotent) ──────────
+  // prisma db push may silently skip additive changes on some environments;
+  // run the ALTER explicitly so the column is always present.
   const prisma = new PrismaClient();
+  try {
+    await prisma.$executeRaw`
+      ALTER TABLE "PriceHistory"
+        ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General'
+    `;
+    console.log("PriceHistory.category column ensured");
+  } catch (e) {
+    console.error("Column ensure error (non-fatal):", e.message);
+  }
+
+  // ── 3. Backfill categories ───────────────────────────────────────────────
   try {
     const count = await prisma.$executeRaw`
       UPDATE "PriceHistory" ph
