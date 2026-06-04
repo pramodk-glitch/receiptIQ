@@ -233,10 +233,9 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
 }
 
 
-// Claude 3.5 Sonnet is used for PDF processing — PDF support (pdfs-2024-09-25
-// beta) is confirmed stable on 3.x models. Claude 4.x models may handle PDFs
-// differently and were causing silent hallucinations.
-const PDF_MODEL = "claude-3-5-sonnet-20241022";
+// claude-sonnet-4-6 has native PDF support — no beta header required.
+// (pdfs-2024-09-25 was a Claude 3.x beta; Claude 4 models support PDFs natively)
+const PDF_MODEL = "claude-sonnet-4-6";
 
 export async function extractReceiptFromPdfWithPrompt(pdfBuffer: Buffer, prompt: string): Promise<OcrResult> {
   const base64Pdf = pdfBuffer.toString("base64");
@@ -286,9 +285,8 @@ async function callAnthropicApi(
 
   // PDF support requires the beta header — without it the document block is
   // silently dropped and Claude hallucinates a receipt from nothing.
-  if (isPdf) {
-    headers["anthropic-beta"] = "pdfs-2024-09-25";
-  }
+  // Note: pdfs-2024-09-25 beta was for Claude 3.x only.
+  // claude-sonnet-4-6 (Claude 4) supports PDFs natively — no beta header needed.
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

@@ -67,7 +67,7 @@ The number BEFORE "@" is quantity (not a line number), the number AFTER "@" is u
 
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
-async function callAnthropic(content) {
+async function callAnthropic(content, isPdf = false) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set in Lambda environment variables");
 
@@ -76,6 +76,9 @@ async function callAnthropic(content) {
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
   };
+
+  // claude-sonnet-4-6 supports PDFs natively (Claude 4) — no beta header needed.
+  // Keeping this comment so future maintainers know why there's no pdfs-2024-09-25 header.
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
