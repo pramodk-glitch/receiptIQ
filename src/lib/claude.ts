@@ -84,21 +84,35 @@ const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return
 
 Follow these rules exactly:
 
-item_name: Product name only. Strip out any trailing codes, department numbers, discount markers, or price-like numbers that are not part of the product name. Example: if the receipt shows "BROOM -2" or "BROOM 047", the item_name is "Broom".
+item_name:
+- Product name only — title case, clean English.
+- Many receipts print a line number before the name (e.g. "5 CHINESE BROOM" or "12 BANANA BUNCH"). Do NOT include that number in the name.
+- Strip any trailing store codes, department tags, or short numeric/dash suffixes that are not meaningful product words (e.g. "BROOM -2" → "Chinese Broom", "RICE 047" → "Rice").
+- Size or variety information that is part of the product name is fine to keep (e.g. "Pringles Ranch 140g").
 
-quantity: Number of units bought (positive integer). Default 1 if not shown.
+quantity:
+- Number of units purchased (positive number).
+- For weight-priced items the quantity is the weight (e.g. 1.43 lbs). Use the decimal weight as-is.
+- Default 1 if not shown.
 
-unit_price: Price for ONE unit (positive number). If the receipt shows "2 x $11.99 = $23.98", unit_price is 11.99. Never include negative prices.
+unit_price:
+- Price for one unit or one lb/kg (positive number).
+- Many receipts use the format "QTY @ UNIT_PRICE  LINE_TOTAL". Take the number after "@" as unit_price.
+- Never negative.
 
-line_total: quantity × unit_price (always a positive number).
+line_total:
+- The actual charged amount for that item (positive number).
+- On receipts using "QTY @ UNIT_PRICE  LINE_TOTAL", take the rightmost number as line_total.
 
-SKIP these lines entirely — do not create items for them:
-- Discounts, coupons, savings, or any line with a negative dollar amount
-- Tax, fee, tip, or charge lines
-- Subtotal, total, balance, change, cash, or payment lines
-- Loyalty points or reward lines
+SKIP these lines — do not create items for them:
+- "You Saved", "Regular Price", "Savings", discount, or coupon lines
+- Any line whose dollar amount is negative
+- Tax, fee, subtotal, total, balance, change, cash, or card payment lines
+- Loyalty points, rewards, or receipt footer text
 
-total_amount: The final amount charged (the grand total on the receipt).
+total_amount: The grand total actually charged (after tax).
+
+N or T printed after a price means non-taxable / taxable — ignore it.
 
 category must be one of: Groceries, Electronics, Dining, Medicine, Household, Personal Care, Travel, Entertainment, General`;
 
