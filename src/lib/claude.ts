@@ -227,37 +227,21 @@ export async function extractReceiptFromPdf(pdfBuffer: Buffer): Promise<OcrResul
 }
 
 export async function extractReceiptFromUrl(url: string, mediaType: string): Promise<OcrResult> {
-  // SDK v0.27 doesn't support URL source types — use raw fetch to bypass the type constraints.
-  // The API key is read the same way the SDK reads it at construction time.
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? (anthropic as unknown as { apiKey: string }).apiKey;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-
+  // SDK v0.27 types don't include URL sources — cast content to any to bypass
+  // the compile-time constraint while still using the SDK for auth/transport.
   const isPdf = mediaType === "application/pdf";
-  const contentBlock = isPdf
-    ? { type: "document", source: { type: "url", url } }
-    : { type: "image", source: { type: "url", url } };
+  const content: unknown[] = isPdf
+    ? [{ type: "document", source: { type: "url", url } }, { type: "text", text: RECEIPT_PROMPT }]
+    : [{ type: "image",    source: { type: "url", url } }, { type: "text", text: RECEIPT_PROMPT }];
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      messages: [{ role: "user", content: [contentBlock, { type: "text", text: RECEIPT_PROMPT }] }],
-    }),
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8192,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: [{ role: "user", content: content as any }],
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${errorText}`);
-  }
-
-  const result = await response.json();
-  const text = result.content?.[0]?.text ?? "";
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
   return parseClaudeResponse(text);
 }
 
