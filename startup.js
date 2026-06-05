@@ -214,20 +214,21 @@ async function main() {
     console.error("Category backfill error (non-fatal):", e.message);
   }
 
-  // ── 5. Backfill PriceHistory.productGroup ────────────────────────────────
-  try {
-    await backfillProductGroups(prisma);
-  } catch (e) {
-    console.error("productGroup backfill error (non-fatal):", e.message);
-  } finally {
-    await prisma.$disconnect();
-  }
+  await prisma.$disconnect();
 }
 
 main()
   .then(() => {
-    // ── 6. Start the Next.js server ──────────────────────────────────────
+    // ── 6. Start the Next.js server FIRST ────────────────────────────────
+    // The productGroup backfill runs async in the background so it never
+    // delays server startup (200 Haiku calls × ~500ms = several minutes).
     require("./server.js");
+
+    // ── 7. Backfill productGroup in background ────────────────────────────
+    const bgPrisma = new PrismaClient();
+    backfillProductGroups(bgPrisma)
+      .catch((e) => console.error("productGroup backfill error:", e.message))
+      .finally(() => bgPrisma.$disconnect());
   })
   .catch((e) => {
     console.error("Startup error:", e);
