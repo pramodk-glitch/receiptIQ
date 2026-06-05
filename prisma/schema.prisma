@@ -81,6 +81,7 @@ model PriceHistory {
   unit               String?
   category           String   @default("General")
   productGroup       String?  // semantic grouping: "Milk", "Chicken Breast", etc.
+  subCategory        String?  // fixed taxonomy: "Dairy & Eggs", "Produce — Fruits", etc.
   capturedAt         DateTime @default(now())
   source             String   @default("receipt")
   userId             String

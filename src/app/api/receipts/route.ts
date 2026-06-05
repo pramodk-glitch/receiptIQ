@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import crypto from "crypto";
-import { classifyProductGroup } from "@/lib/product-classifier";
+import { classifyItem } from "@/lib/product-classifier";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -144,13 +144,12 @@ export async function POST(request: NextRequest) {
         if (sc) {
           for (const row of itemRows) {
             if (row.unitPrice > 0) {
-              // Classify asynchronously — don't block the transaction
-              const pg = await classifyProductGroup(row.itemName, row.category).catch(() => null);
+              const cls = await classifyItem(row.itemName, row.category).catch(() => null);
               await tx.$executeRaw`
                 INSERT INTO "PriceHistory"
-                  (id, "itemNameNormalized", "storeChain", "unitPrice", category, "productGroup", "capturedAt", source, "userId")
+                  (id, "itemNameNormalized", "storeChain", "unitPrice", category, "productGroup", "subCategory", "capturedAt", source, "userId")
                 VALUES
-                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${pg}, NOW(), 'receipt', ${session.user.id!})
+                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${cls?.productGroup ?? null}, ${cls?.subCategory ?? null}, NOW(), 'receipt', ${session.user.id!})
               `;
             }
           }

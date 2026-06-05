@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { PriceTrendChart } from "@/components/price-intel/PriceTrendChart";
 import { PriceAlertCard } from "@/components/price-intel/PriceAlertCard";
 import { PriceCategoryTree } from "@/components/price-intel/PriceCategoryTree";
-import type { CategoryNode, ProductGroup, ProductVariant, PriceTrend } from "@/types/price-intel";
+import type { CategoryNode, SubCategoryNode, ProductGroup, ProductVariant, PriceTrend } from "@/types/price-intel";
+import { SUBCATEGORY_TAXONOMY } from "@/lib/product-classifier";
 
 const CATEGORY_ICONS: Record<string, string> = {
   Groceries: "🛒", Electronics: "⚡", Dining: "🍽️", Medicine: "💊",
@@ -36,20 +37,19 @@ function computeTrend(prices: Array<{ unitPrice: number; capturedAt: string }>):
 }
 
 async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
-  // Fetch all price history with item names
   const rows = await prisma.$queryRaw<Array<{
-    id: string;
     itemNameNormalized: string;
     productGroup: string | null;
+    subCategory: string | null;
     category: string;
     storeChain: string;
     unitPrice: number;
     capturedAt: string;
   }>>`
     SELECT
-      ph.id,
       ph."itemNameNormalized",
       ph."productGroup",
+      ph."subCategory",
       ph.category,
       ph."storeChain",
       CAST(ph."unitPrice" AS float) AS "unitPrice",
@@ -63,85 +63,100 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
 
   if (rows.length === 0) return [];
 
-  // Group by category → productGroup → variants
-  type GroupKey = string; // category__productGroup
-  const map = new Map<string, Map<GroupKey, Array<typeof rows[number]>>>();
+  // Build: cat → subCat → pg → entries
+  const map = new Map<string, Map<string, Map<string, Array<typeof rows[number]>>>>();
 
   for (const row of rows) {
     const cat = row.category || "General";
-    const pg = row.productGroup || toTitleCase(
+    const pg  = row.productGroup || toTitleCase(
       row.itemNameNormalized.replace(/[™®©]/g, "").split(/[\s\-:,]+/).slice(0, 2).join(" ")
     );
+    const sc  = row.subCategory
+      || (SUBCATEGORY_TAXONOMY[cat] ?? SUBCATEGORY_TAXONOMY.General)[0];
 
     if (!map.has(cat)) map.set(cat, new Map());
-    const catMap = map.get(cat)!;
-    if (!catMap.has(pg)) catMap.set(pg, []);
-    catMap.get(pg)!.push(row);
+    const scMap = map.get(cat)!;
+    if (!scMap.has(sc)) scMap.set(sc, new Map());
+    const pgMap = scMap.get(sc)!;
+    if (!pgMap.has(pg)) pgMap.set(pg, []);
+    pgMap.get(pg)!.push(row);
   }
-
-  const nodes: CategoryNode[] = [];
 
   const orderedCats = [
     ...CATEGORY_ORDER.filter((c) => map.has(c)),
     ...Array.from(map.keys()).filter((c) => !CATEGORY_ORDER.includes(c)),
   ];
 
-  for (const cat of orderedCats) {
-    const pgMap = map.get(cat)!;
-    const products: ProductGroup[] = [];
+  const nodes: CategoryNode[] = [];
 
-    for (const [pg, entries] of Array.from(pgMap.entries())) {
-      // Build variants: latest purchase per (itemNameNormalized, storeChain)
-      const variantMap = new Map<string, typeof entries[number]>();
-      for (const e of entries) {
-        const vk = `${e.itemNameNormalized}__${e.storeChain}`;
-        if (!variantMap.has(vk)) variantMap.set(vk, e); // already sorted desc
+  for (const cat of orderedCats) {
+    const scMap = map.get(cat)!;
+    const taxonomyOrder = SUBCATEGORY_TAXONOMY[cat] ?? SUBCATEGORY_TAXONOMY.General;
+
+    const orderedSCs = [
+      ...taxonomyOrder.filter(sc => scMap.has(sc)),
+      ...Array.from(scMap.keys()).filter(sc => !taxonomyOrder.includes(sc)),
+    ];
+
+    const subCategories: SubCategoryNode[] = [];
+
+    for (const sc of orderedSCs) {
+      const pgMap = scMap.get(sc)!;
+      const products: ProductGroup[] = [];
+
+      for (const [pg, entries] of Array.from(pgMap.entries())) {
+        const variantMap = new Map<string, typeof entries[number]>();
+        for (const e of entries) {
+          const vk = `${e.itemNameNormalized}__${e.storeChain}`;
+          if (!variantMap.has(vk)) variantMap.set(vk, e);
+        }
+
+        const allPrices = entries.map(e => ({ unitPrice: Number(e.unitPrice), capturedAt: e.capturedAt }));
+        const trend = computeTrend(allPrices);
+
+        const variantList: ProductVariant[] = Array.from(variantMap.values()).map(e => ({
+          itemNameNormalized: e.itemNameNormalized,
+          itemName: toTitleCase(e.itemNameNormalized.replace(/[™®©]/g, "")),
+          storeChain: e.storeChain,
+          unitPrice: Number(e.unitPrice),
+          capturedAt: e.capturedAt,
+          isCheapest: false,
+        }));
+
+        const minPrice = Math.min(...variantList.map(v => v.unitPrice));
+        variantList.forEach(v => { v.isCheapest = v.unitPrice === minPrice; });
+        variantList.sort((a, b) => a.unitPrice - b.unitPrice);
+
+        const stores = Array.from(new Set(variantList.map(v => v.storeChain)));
+
+        products.push({
+          productGroup: pg,
+          subCategory: sc,
+          category: cat,
+          variantCount: variantList.length,
+          storeCount: stores.length,
+          minPrice,
+          maxPrice: Math.max(...variantList.map(v => v.unitPrice)),
+          bestStore: variantList[0]?.storeChain ?? "",
+          trend,
+          variants: variantList,
+        });
       }
 
-      const allPrices = entries.map((e) => ({ unitPrice: Number(e.unitPrice), capturedAt: e.capturedAt }));
-      const trend = computeTrend(allPrices);
-
-      const variantList: ProductVariant[] = Array.from(variantMap.values()).map((e) => ({
-        itemNameNormalized: e.itemNameNormalized,
-        itemName: toTitleCase(e.itemNameNormalized.replace(/[™®©]/g, "")),
-        storeChain: e.storeChain,
-        unitPrice: Number(e.unitPrice),
-        capturedAt: e.capturedAt,
-        isCheapest: false,
-      }));
-
-      // Mark cheapest
-      const minPrice = Math.min(...variantList.map((v) => v.unitPrice));
-      variantList.forEach((v) => { v.isCheapest = v.unitPrice === minPrice; });
-      variantList.sort((a, b) => a.unitPrice - b.unitPrice);
-
-      const stores = Array.from(new Set(variantList.map((v) => v.storeChain)));
-      const bestVariant = variantList[0];
-
-      products.push({
-        productGroup: pg,
-        category: cat,
-        variantCount: variantList.length,
-        storeCount: stores.length,
-        minPrice,
-        maxPrice: Math.max(...variantList.map((v) => v.unitPrice)),
-        bestStore: bestVariant?.storeChain ?? "",
-        trend,
-        variants: variantList,
+      products.sort((a, b) => {
+        if (a.storeCount !== b.storeCount) return b.storeCount - a.storeCount;
+        return a.productGroup.localeCompare(b.productGroup);
       });
+
+      subCategories.push({ subCategory: sc, productCount: products.length, products });
     }
 
-    // Sort: multi-store first, then alphabetically
-    products.sort((a, b) => {
-      if (a.storeCount !== b.storeCount) return b.storeCount - a.storeCount;
-      return a.productGroup.localeCompare(b.productGroup);
-    });
-
+    const totalProducts = subCategories.reduce((s, sc) => s + sc.productCount, 0);
     nodes.push({
       category: cat,
       icon: CATEGORY_ICONS[cat] ?? "📦",
-      productCount: products.length,
-      products,
+      productCount: totalProducts,
+      subCategories,
     });
   }
 

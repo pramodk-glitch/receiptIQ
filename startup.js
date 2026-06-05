@@ -35,40 +35,48 @@ async function resolveAnthropicKey() {
 }
 
 // ── 5. productGroup backfill via Claude Haiku ─────────────────────────────────
+const SUBCATEGORY_TAXONOMY = {
+  Groceries: ["Produce — Fruits","Produce — Vegetables","Dairy & Eggs","Meat & Poultry","Seafood","Bakery & Bread","Cereals & Grains","Snacks & Chips","Beverages","Frozen Foods","Canned & Packaged","Condiments & Spices","International Foods","Other Groceries"],
+  Household: ["Cleaning","Paper Products","Laundry","Kitchen & Dining","Storage & Organization","Other Household"],
+  "Personal Care": ["Hair Care","Skin Care","Oral Care","Medicine & Health","Other Personal Care"],
+  Electronics: ["Phones & Accessories","Computers & Tablets","TV & Audio","Other Electronics"],
+  Dining: ["Restaurant","Café & Coffee","Fast Food","Other Dining"],
+  Travel: ["Transport","Accommodation","Other Travel"],
+  Entertainment: ["Streaming","Events","Books & Media","Other Entertainment"],
+  Medicine: ["Prescription","OTC Medication","Vitamins & Supplements","Other Medicine"],
+  General: ["General"],
+};
+
 async function classifyProductGroup(itemName, category) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const prompt = `What is the short generic product type for this retail item?
+  const subCats = (SUBCATEGORY_TAXONOMY[category] || SUBCATEGORY_TAXONOMY.General).join(", ");
+
+  const prompt = `Classify this retail item. Return ONLY a JSON object, no other text.
 Item: "${itemName}"
 Category: ${category}
 
-Reply with ONLY the generic product name in title case, 1-3 words max.
-Examples:
-  "Vitamin D Whole Milk - 1gal - Good & Gather" → Milk
-  "Perdue Thin Sliced Antibiotic Free Chicken Breast" → Chicken Breast
-  "Pringles Snack Cups Variety Pack Potato Crisps 12.9oz" → Potato Chips
-  "Fresh Broccoli Florets 12oz" → Broccoli
-  "Laxmi Idly Rice 20lb" → Rice
-  "King Machine Washable Extra Firm Bed Pillow" → Bed Pillow`;
+Rules:
+1. productGroup: short generic name (1-4 words, title case). Strip ALL store brand names (Good & Gather, Market Pantry, Threshold, Kirkland, Great Value, etc.) and sizes/weights.
+   Examples: "Vitamin D Whole Milk 1gal Good & Gather" → "Milk"
+             "Fresh Broccoli Florets 12oz" → "Broccoli"
+             "Perdue Thin Sliced Antibiotic Free Chicken Breast" → "Chicken Breast"
+             "Frozen Crispy Hash Brown Potato Patties Market Pantry" → "Hash Browns"
+2. subCategory: pick EXACTLY one from: ${subCats}
+
+Return: {"productGroup":"string","subCategory":"string"}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 20,
-        messages: [{ role: "user", content: prompt }],
-      }),
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return (json.content?.[0]?.text ?? "").trim().replace(/['"]/g, "") || null;
+    const text = (json.content?.[0]?.text ?? "").trim();
+    return JSON.parse(text.replace(/```json\s*/i,"").replace(/```\s*$/i,"").trim());
   } catch {
     return null;
   }
@@ -81,11 +89,11 @@ async function backfillProductGroups(prisma) {
     return;
   }
 
-  // Find all distinct items that need classification
+  // Find all distinct items missing productGroup OR subCategory
   const unclassified = await prisma.$queryRaw`
     SELECT DISTINCT "itemNameNormalized", category
     FROM "PriceHistory"
-    WHERE "productGroup" IS NULL
+    WHERE ("productGroup" IS NULL OR "subCategory" IS NULL)
       AND "itemNameNormalized" IS NOT NULL
       AND "itemNameNormalized" != ''
     LIMIT 200
@@ -110,12 +118,16 @@ async function backfillProductGroups(prisma) {
     const group = await classifyProductGroup(displayName, row.category);
     if (!group) { failed++; continue; }
 
+    const pg = typeof group === "object" ? group.productGroup : group;
+    const sc = typeof group === "object" ? group.subCategory  : null;
+
     try {
       const result = await prisma.$executeRaw`
         UPDATE "PriceHistory"
-        SET "productGroup" = ${group}
+        SET "productGroup" = COALESCE("productGroup", ${pg}),
+            "subCategory"  = COALESCE("subCategory",  ${sc})
         WHERE "itemNameNormalized" = ${row.itemNameNormalized}
-          AND "productGroup" IS NULL
+          AND ("productGroup" IS NULL OR "subCategory" IS NULL)
       `;
       updated += Number(result);
     } catch (e) {
@@ -131,7 +143,7 @@ async function backfillProductGroups(prisma) {
 
   // If there are more unclassified rows (hit the 200 limit), log a reminder
   const remaining = await prisma.$queryRaw`
-    SELECT COUNT(*) as count FROM "PriceHistory" WHERE "productGroup" IS NULL
+    SELECT COUNT(*) as count FROM "PriceHistory" WHERE "productGroup" IS NULL OR "subCategory" IS NULL
   `;
   const rem = Number(remaining[0]?.count ?? 0);
   if (rem > 0) {
@@ -191,6 +203,16 @@ async function main() {
     console.log("PriceHistory.productGroup column ensured");
   } catch (e) {
     console.error("PriceHistory.productGroup column error (non-fatal):", e.message);
+  }
+
+  try {
+    await prisma.$executeRaw`
+      ALTER TABLE "PriceHistory"
+        ADD COLUMN IF NOT EXISTS "subCategory" TEXT
+    `;
+    console.log("PriceHistory.subCategory column ensured");
+  } catch (e) {
+    console.error("subCategory column error (non-fatal):", e.message);
   }
 
   // ── 4. Backfill PriceHistory.category ────────────────────────────────────

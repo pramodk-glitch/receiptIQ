@@ -44,6 +44,7 @@ export interface ProductVariant {
 
 export interface ProductGroup {
   productGroup: string;      // e.g. "Milk", "Chicken Breast"
+  subCategory: string;       // e.g. "Dairy & Eggs", "Produce — Vegetables"
   category: string;
   variantCount: number;
   storeCount: number;
@@ -54,9 +55,15 @@ export interface ProductGroup {
   variants: ProductVariant[];
 }
 
+export interface SubCategoryNode {
+  subCategory: string;
+  productCount: number;
+  products: ProductGroup[];
+}
+
 export interface CategoryNode {
   category: string;
   icon: string;
   productCount: number;
-  products: ProductGroup[];
+  subCategories: SubCategoryNode[];
 }
