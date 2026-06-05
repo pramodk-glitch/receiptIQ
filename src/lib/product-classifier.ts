@@ -44,7 +44,18 @@ export const SUBCATEGORY_TAXONOMY: Record<string, string[]> = {
   Travel:        ["Transport", "Accommodation", "Other Travel"],
   Entertainment: ["Streaming", "Events", "Books & Media", "Other Entertainment"],
   Medicine:      ["Prescription", "OTC Medication", "Vitamins & Supplements", "Other Medicine"],
-  General:       ["General"],
+  General: [
+    "Electronics & Gadgets",
+    "Clothing & Accessories",
+    "Kids & Baby",
+    "Home & Garden",
+    "Arts & Crafts",
+    "Sports & Outdoors",
+    "Pet Supplies",
+    "Books & Media",
+    "Party & Gifts",
+    "Other General",
+  ],
 };
 
 // Store-owned brands whose names should be stripped from product group names
