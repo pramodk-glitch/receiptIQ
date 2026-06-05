@@ -90,7 +90,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
     const pgMap = map.get(cat)!;
     const products: ProductGroup[] = [];
 
-    for (const [pg, entries] of pgMap.entries()) {
+    for (const [pg, entries] of Array.from(pgMap.entries())) {
       // Build variants: latest purchase per (itemNameNormalized, storeChain)
       const variantMap = new Map<string, typeof entries[number]>();
       for (const e of entries) {
@@ -101,7 +101,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
       const allPrices = entries.map((e) => ({ unitPrice: Number(e.unitPrice), capturedAt: e.capturedAt }));
       const trend = computeTrend(allPrices);
 
-      const variantList: ProductVariant[] = [...variantMap.values()].map((e) => ({
+      const variantList: ProductVariant[] = Array.from(variantMap.values()).map((e) => ({
         itemNameNormalized: e.itemNameNormalized,
         itemName: toTitleCase(e.itemNameNormalized.replace(/[™®©]/g, "")),
         storeChain: e.storeChain,
