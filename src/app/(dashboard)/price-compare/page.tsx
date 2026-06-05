@@ -71,8 +71,10 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
     const pg  = row.productGroup || toTitleCase(
       row.itemNameNormalized.replace(/[™®©]/g, "").split(/[\s\-:,]+/).slice(0, 2).join(" ")
     );
-    const sc  = row.subCategory
-      || (SUBCATEGORY_TAXONOMY[cat] ?? SUBCATEGORY_TAXONOMY.General)[0];
+    const taxList = SUBCATEGORY_TAXONOMY[cat] ?? SUBCATEGORY_TAXONOMY.General;
+    // Fall back to the last entry ("Other Groceries" etc.) so unclassified
+    // items don't pollute real sub-categories while the backfill runs.
+    const sc  = row.subCategory || taxList[taxList.length - 1];
 
     if (!map.has(cat)) map.set(cat, new Map());
     const scMap = map.get(cat)!;

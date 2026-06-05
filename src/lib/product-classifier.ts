@@ -159,7 +159,7 @@ function buildFallback(itemName: string, category: string): ClassificationResult
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(" ") || itemName.split(" ").slice(0, 2).join(" ");
 
-  return { productGroup, subCategory: subCats[0] };
+  return { productGroup, subCategory: subCats[subCats.length - 1] };
 }
 
 // ── Backfill helper (used in startup.js) ─────────────────────────────────────
