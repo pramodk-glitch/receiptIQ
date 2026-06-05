@@ -80,10 +80,12 @@ model PriceHistory {
   unitPrice          Float
   unit               String?
   category           String   @default("General")
+  productGroup       String?  // semantic grouping: "Milk", "Chicken Breast", etc.
   capturedAt         DateTime @default(now())
   source             String   @default("receipt")
   userId             String
 
   @@index([userId, itemNameNormalized])
   @@index([userId, category])
+  @@index([userId, productGroup])
 }

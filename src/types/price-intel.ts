@@ -6,6 +6,7 @@ export interface StorePrice {
   isCheapest: boolean;
 }
 
+// ── Legacy (kept for backward compat) ────────────────────────────────────────
 export interface CategoryItem {
   itemNameNormalized: string;
   category: string;
@@ -17,4 +18,45 @@ export interface CategoryItem {
 export interface CategoryGroup {
   category: string;
   items: CategoryItem[];
+}
+
+// ── New 3-level tree types ────────────────────────────────────────────────────
+
+export type TrendDirection = "up" | "down" | "stable" | "new";
+
+export interface PriceTrend {
+  direction: TrendDirection;
+  pct: number;           // % change (positive = up)
+  currentPrice: number;
+  previousPrice: number | null;
+  currentDate: string;
+  previousDate: string | null;
+}
+
+export interface ProductVariant {
+  itemNameNormalized: string;
+  itemName: string;          // display (title-cased)
+  storeChain: string;
+  unitPrice: number;
+  capturedAt: string;
+  isCheapest: boolean;
+}
+
+export interface ProductGroup {
+  productGroup: string;      // e.g. "Milk", "Chicken Breast"
+  category: string;
+  variantCount: number;
+  storeCount: number;
+  minPrice: number;
+  maxPrice: number;
+  bestStore: string;
+  trend: PriceTrend;
+  variants: ProductVariant[];
+}
+
+export interface CategoryNode {
+  category: string;
+  icon: string;
+  productCount: number;
+  products: ProductGroup[];
 }

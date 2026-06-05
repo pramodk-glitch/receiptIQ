@@ -82,6 +82,17 @@ async function main() {
     console.error("Column ensure error (non-fatal):", e.message);
   }
 
+  // ── 2e. Ensure PriceHistory.productGroup column exists ───────────────────
+  try {
+    await prisma.$executeRaw`
+      ALTER TABLE "PriceHistory"
+        ADD COLUMN IF NOT EXISTS "productGroup" TEXT
+    `;
+    console.log("PriceHistory.productGroup column ensured");
+  } catch (e) {
+    console.error("productGroup column error (non-fatal):", e.message);
+  }
+
   // ── 3. Backfill categories ───────────────────────────────────────────────
   try {
     const count = await prisma.$executeRaw`
