@@ -115,7 +115,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
       variantList.forEach((v) => { v.isCheapest = v.unitPrice === minPrice; });
       variantList.sort((a, b) => a.unitPrice - b.unitPrice);
 
-      const stores = [...new Set(variantList.map((v) => v.storeChain))];
+      const stores = Array.from(new Set(variantList.map((v) => v.storeChain)));
       const bestVariant = variantList[0];
 
       products.push({
