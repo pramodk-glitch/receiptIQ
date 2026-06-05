@@ -23,7 +23,6 @@ export default function NavMenu() {
           <Link href="/dashboard" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground">Dashboard</Link>
           <Link href="/receipts" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground">Receipts</Link>
           <Link href="/receipts/upload" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground">Upload</Link>
-          <Link href="/import" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground">Import Amazon</Link>
           <Link href="/manual-entry" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground">Manual Entry</Link>
           <Link href="/price-compare" onClick={() => setOpen(false)} className="text-sm font-medium text-primary">Price Intel</Link>
         </div>

@@ -61,12 +61,6 @@ export default async function DashboardLayout({
                   Upload
                 </Link>
                 <Link
-                  href="/import"
-                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Import Amazon
-                </Link>
-                <Link
                   href="/manual-entry"
                   className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
                 >
