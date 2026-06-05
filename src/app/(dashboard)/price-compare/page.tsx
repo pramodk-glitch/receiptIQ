@@ -83,7 +83,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
 
   const orderedCats = [
     ...CATEGORY_ORDER.filter((c) => map.has(c)),
-    ...[...map.keys()].filter((c) => !CATEGORY_ORDER.includes(c)),
+    ...Array.from(map.keys()).filter((c) => !CATEGORY_ORDER.includes(c)),
   ];
 
   for (const cat of orderedCats) {
