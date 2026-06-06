@@ -99,6 +99,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Classify items BEFORE the transaction so API calls don't cause timeout ──
+    const sc = storeChain ? String(storeChain).trim() : "";
+    type ItemRow = {
+      receiptId: string; userId: string; itemName: string; itemNameNormalized: string;
+      quantity: number; unitPrice: number; lineTotal: number;
+      category: string; brand: string | null; unit: string | null;
+      productGroup: string | null; subCategory: string | null;
+    };
+    const itemRows: Omit<ItemRow, "receiptId">[] = await Promise.all(
+      items.map(async (item: {
+        itemName: string; quantity?: number; unitPrice: number;
+        lineTotal?: number; category?: string; brand?: string; unit?: string;
+      }) => {
+        const cat = String(item.category ?? "General");
+        const cls = await classifyItem(String(item.itemName), cat).catch(() => null);
+        return {
+          userId: session.user.id!,
+          itemName: String(item.itemName),
+          itemNameNormalized: String(item.itemName).toLowerCase().trim(),
+          quantity: Number(item.quantity ?? 1),
+          unitPrice: Number(item.unitPrice),
+          lineTotal: Number(item.lineTotal ?? item.unitPrice * (item.quantity ?? 1)),
+          category: cat,
+          brand: item.brand ? String(item.brand) : null,
+          unit: item.unit ? String(item.unit) : null,
+          productGroup: cls?.productGroup ?? null,
+          subCategory: cls?.subCategory ?? null,
+        };
+      })
+    );
+
+    // ── Transaction: only fast DB writes, no external API calls ──────────────
     const receipt = await prisma.$transaction(async (tx) => {
       const newReceipt = await tx.receipt.create({
         data: {
@@ -115,41 +147,19 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (items.length > 0) {
-        const itemRows = items.map((item: {
-          itemName: string;
-          quantity?: number;
-          unitPrice: number;
-          lineTotal?: number;
-          category?: string;
-          brand?: string;
-          unit?: string;
-        }) => ({
-          receiptId: newReceipt.id,
-          userId: session.user.id!,
-          itemName: String(item.itemName),
-          itemNameNormalized: String(item.itemName).toLowerCase().trim(),
-          quantity: Number(item.quantity ?? 1),
-          unitPrice: Number(item.unitPrice),
-          lineTotal: Number(item.lineTotal ?? item.unitPrice * (item.quantity ?? 1)),
-          category: String(item.category ?? "General"),
-          brand: item.brand ? String(item.brand) : null,
-          unit: item.unit ? String(item.unit) : null,
-        }));
+      if (itemRows.length > 0) {
+        await tx.receiptItem.createMany({
+          data: itemRows.map(r => ({ ...r, receiptId: newReceipt.id })),
+        });
 
-        await tx.receiptItem.createMany({ data: itemRows });
-
-        // Populate PriceHistory with product group classification
-        const sc = storeChain ? String(storeChain).trim() : "";
         if (sc) {
           for (const row of itemRows) {
             if (row.unitPrice > 0) {
-              const cls = await classifyItem(row.itemName, row.category).catch(() => null);
               await tx.$executeRaw`
                 INSERT INTO "PriceHistory"
                   (id, "itemNameNormalized", "storeChain", "unitPrice", category, "productGroup", "subCategory", "capturedAt", source, "userId")
                 VALUES
-                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${cls?.productGroup ?? null}, ${cls?.subCategory ?? null}, NOW(), 'receipt', ${session.user.id!})
+                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${row.productGroup}, ${row.subCategory}, NOW(), 'receipt', ${session.user.id!})
               `;
             }
           }
