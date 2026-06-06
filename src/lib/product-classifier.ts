@@ -82,6 +82,14 @@ export async function classifyItem(
   const key = `${category}:${itemName.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key)!;
 
+  // ── Tier 2: Keyword rules (free, instant, no API) ────────────────────────
+  const { classifyByKeyword } = await import("./local-classifier");
+  const kwResult = classifyByKeyword(itemName);
+  if (kwResult) {
+    cache.set(key, kwResult);
+    return kwResult;
+  }
+
   const subCats = SUBCATEGORY_TAXONOMY[category] ?? SUBCATEGORY_TAXONOMY.General;
   const fallback = buildFallback(itemName, category);
 

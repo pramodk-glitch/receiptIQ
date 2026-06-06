@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import crypto from "crypto";
 import { classifyItem } from "@/lib/product-classifier";
+import { classifyByKeyword } from "@/lib/local-classifier";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -99,6 +100,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Tier 1: DB lookup for items we've classified before ──────────────────
+    const knownItems = items.length > 0
+      ? await prisma.$queryRaw<Array<{ itemNameNormalized: string; productGroup: string; subCategory: string }>>`
+          SELECT DISTINCT ON ("itemNameNormalized")
+            "itemNameNormalized", "productGroup", "subCategory"
+          FROM "PriceHistory"
+          WHERE "userId" = ${session.user.id!}
+            AND "itemNameNormalized" = ANY(${items.map((i: { itemName: string }) => i.itemName.toLowerCase().trim())})
+            AND "productGroup" IS NOT NULL
+            AND "subCategory" IS NOT NULL
+          ORDER BY "itemNameNormalized", "capturedAt" DESC
+        `
+      : [];
+    const knownMap = new Map(knownItems.map(r => [r.itemNameNormalized, { productGroup: r.productGroup, subCategory: r.subCategory }]));
+
     // ── Classify items BEFORE the transaction so API calls don't cause timeout ──
     const sc = storeChain ? String(storeChain).trim() : "";
     type ItemRow = {
@@ -113,20 +129,30 @@ export async function POST(request: NextRequest) {
         lineTotal?: number; category?: string; brand?: string; unit?: string;
       }) => {
         const cat = String(item.category ?? "General");
-        const cls = await classifyItem(String(item.itemName), cat).catch(() => null);
-        return {
+        const normalized = String(item.itemName).toLowerCase().trim();
+        const base = {
           userId: session.user.id!,
           itemName: String(item.itemName),
-          itemNameNormalized: String(item.itemName).toLowerCase().trim(),
+          itemNameNormalized: normalized,
           quantity: Number(item.quantity ?? 1),
           unitPrice: Number(item.unitPrice),
           lineTotal: Number(item.lineTotal ?? item.unitPrice * (item.quantity ?? 1)),
           category: cat,
           brand: item.brand ? String(item.brand) : null,
           unit: item.unit ? String(item.unit) : null,
-          productGroup: cls?.productGroup ?? null,
-          subCategory: cls?.subCategory ?? null,
         };
+
+        // Tier 1: DB lookup (previously classified same item — free, instant)
+        const known = knownMap.get(normalized);
+        if (known) return { ...base, productGroup: known.productGroup, subCategory: known.subCategory };
+
+        // Tier 2: keyword rules (built-in dictionary — free, instant)
+        const kw = classifyByKeyword(String(item.itemName));
+        if (kw) return { ...base, productGroup: kw.productGroup, subCategory: kw.subCategory };
+
+        // Tier 3: Claude Haiku (only for truly unknown items)
+        const cls = await classifyItem(String(item.itemName), cat).catch(() => null);
+        return { ...base, productGroup: cls?.productGroup ?? null, subCategory: cls?.subCategory ?? null };
       })
     );
 
