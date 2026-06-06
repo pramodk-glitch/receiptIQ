@@ -134,12 +134,14 @@ jobs:
             --parameters "{\"commands\":[
               \"grep -q ANTHROPIC_SECRET_ARN /home/ubuntu/receiptiq.env || echo 'ANTHROPIC_SECRET_ARN=${ANTHROPIC_SECRET_ARN}' >> /home/ubuntu/receiptiq.env\",
               \"/usr/local/bin/aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
+              \"PREV_IMAGE=\$(docker inspect receiptiq --format '{{.Config.Image}}' 2>/dev/null || echo '')\",
+              \"echo Previous image: \$PREV_IMAGE\",
               \"docker pull ${IMAGE}\",
               \"docker network create receiptiq_net 2>/dev/null || true\",
               \"docker stop receiptiq || true\",
               \"docker rm receiptiq || true\",
               \"docker run -d --name receiptiq --network receiptiq_net --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped ${IMAGE}\",
-              \"sleep 8 && docker inspect -f '{{.State.Running}}' receiptiq | grep -q true || (docker logs receiptiq --tail 30 && exit 1)\",
+              \"sleep 12 && docker inspect -f '{{.State.Running}}' receiptiq 2>/dev/null | grep -q true && echo Deploy OK || (echo New container failed - rolling back && docker rm -f receiptiq || true && [ -n \\\"\$PREV_IMAGE\\\" ] && docker run -d --name receiptiq --network receiptiq_net --env-file /home/ubuntu/receiptiq.env -p 80:3000 --restart unless-stopped \$PREV_IMAGE && echo Rolled back to \$PREV_IMAGE && exit 1)\",
               \"docker image prune -f\"
             ]}" \
             --region ${{ env.AWS_REGION }} \
