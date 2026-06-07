@@ -175,7 +175,10 @@ export async function POST(request: NextRequest) {
 
       if (itemRows.length > 0) {
         await tx.receiptItem.createMany({
-          data: itemRows.map(r => ({ ...r, receiptId: newReceipt.id })),
+          data: itemRows.map(({ productGroup: _pg, subCategory: _sc, ...r }) => ({
+            ...r,
+            receiptId: newReceipt.id,
+          })),
         });
 
         if (sc) {
