@@ -36,6 +36,7 @@ model Receipt {
   createdAt    DateTime      @default(now())
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   items        ReceiptItem[]
+  priceHistory PriceHistory[]
 
   @@index([userId])
   @@index([contentHash])
@@ -85,8 +86,11 @@ model PriceHistory {
   capturedAt         DateTime @default(now())
   source             String   @default("receipt")
   userId             String
+  receiptId          String?
+  receipt            Receipt? @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 
   @@index([userId, itemNameNormalized])
   @@index([userId, category])
   @@index([userId, productGroup])
+  @@index([receiptId])
 }

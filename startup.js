@@ -215,6 +215,32 @@ async function main() {
     console.error("subCategory column error (non-fatal):", e.message);
   }
 
+  try {
+    await prisma.$executeRaw`
+      ALTER TABLE "PriceHistory"
+        ADD COLUMN IF NOT EXISTS "receiptId" TEXT
+    `;
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS "PriceHistory_receiptId_idx" ON "PriceHistory"("receiptId")
+    `;
+    await prisma.$executeRaw`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'PriceHistory_receiptId_fkey'
+            AND table_name = 'PriceHistory'
+        ) THEN
+          ALTER TABLE "PriceHistory"
+            ADD CONSTRAINT "PriceHistory_receiptId_fkey"
+            FOREIGN KEY ("receiptId") REFERENCES "Receipt"(id) ON DELETE CASCADE;
+        END IF;
+      END $$
+    `;
+    console.log("PriceHistory.receiptId column and FK ensured");
+  } catch (e) {
+    console.error("PriceHistory.receiptId column error (non-fatal):", e.message);
+  }
+
   // ── 4. Backfill PriceHistory.category ────────────────────────────────────
   try {
     const count = await prisma.$executeRaw`

@@ -186,9 +186,9 @@ export async function POST(request: NextRequest) {
             if (row.unitPrice > 0) {
               await tx.$executeRaw`
                 INSERT INTO "PriceHistory"
-                  (id, "itemNameNormalized", "storeChain", "unitPrice", category, "productGroup", "subCategory", "capturedAt", source, "userId")
+                  (id, "itemNameNormalized", "storeChain", "unitPrice", category, "productGroup", "subCategory", "capturedAt", source, "userId", "receiptId")
                 VALUES
-                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${row.productGroup}, ${row.subCategory}, NOW(), 'receipt', ${session.user.id!})
+                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.category}, ${row.productGroup}, ${row.subCategory}, NOW(), 'receipt', ${session.user.id!}, ${newReceipt.id})
               `;
             }
           }
