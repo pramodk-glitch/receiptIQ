@@ -7,6 +7,38 @@ import { PriceCategoryTree } from "@/components/price-intel/PriceCategoryTree";
 import type { CategoryNode, SubCategoryNode, ProductGroup, ProductVariant, PriceTrend } from "@/types/price-intel";
 import { SUBCATEGORY_TAXONOMY } from "@/lib/product-classifier";
 
+// Normalises product group names so near-duplicate entries merge into one bucket.
+// Keys are lowercase; values are the canonical display form.
+const PRODUCT_GROUP_ALIASES: Record<string, string> = {
+  // Milk variants
+  "whole milk":   "Milk",
+  "2% milk":      "Milk",
+  "1% milk":      "Milk",
+  "skim milk":    "Milk",
+  "fat free milk":"Milk",
+  "oat milk":     "Milk",
+  "almond milk":  "Milk",
+  "soy milk":     "Milk",
+  "lactose free milk": "Milk",
+  // Banana plural
+  "bananas":      "Banana",
+  // Other common plurals / variants
+  "apples":       "Apple",
+  "oranges":      "Orange",
+  "grapes":       "Grape",
+  "lemons":       "Lemon",
+  "limes":        "Lime",
+  "potatoes":     "Potatoes",
+  "tomatoes":     "Tomatoes",
+  "carrots":      "Carrots",
+  "onions":       "Onions",
+  "eggs":         "Eggs",
+};
+
+function normalizeProductGroup(pg: string): string {
+  return PRODUCT_GROUP_ALIASES[pg.toLowerCase().trim()] ?? pg;
+}
+
 const CATEGORY_ICONS: Record<string, string> = {
   Groceries: "🛒", Electronics: "⚡", Dining: "🍽️", Medicine: "💊",
   Household: "🏠", "Personal Care": "🧴", Travel: "✈️", Entertainment: "🎬", General: "📦",
@@ -44,6 +76,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
     category: string;
     storeChain: string;
     unitPrice: number;
+    unit: string | null;
     capturedAt: string;
   }>>`
     SELECT
@@ -53,6 +86,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
       ph.category,
       ph."storeChain",
       CAST(ph."unitPrice" AS float) AS "unitPrice",
+      ph."unit",
       to_char(ph."capturedAt", 'YYYY-MM-DD') AS "capturedAt"
     FROM "PriceHistory" ph
     WHERE ph."userId" = ${userId}
@@ -68,9 +102,10 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
 
   for (const row of rows) {
     const cat = row.category || "General";
-    const pg  = row.productGroup || toTitleCase(
+    const rawPg = row.productGroup || toTitleCase(
       row.itemNameNormalized.replace(/[™®©]/g, "").split(/[\s\-:,]+/).slice(0, 2).join(" ")
     );
+    const pg = normalizeProductGroup(rawPg);
     const taxList = SUBCATEGORY_TAXONOMY[cat] ?? SUBCATEGORY_TAXONOMY.General;
     // Fall back to the last entry ("Other Groceries" etc.) so unclassified
     // items don't pollute real sub-categories while the backfill runs.
@@ -121,6 +156,7 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
           itemName: toTitleCase(e.itemNameNormalized.replace(/[™®©]/g, "")),
           storeChain: e.storeChain,
           unitPrice: Number(e.unitPrice),
+          unit: e.unit ?? null,
           capturedAt: e.capturedAt,
           isCheapest: false,
         }));
@@ -227,7 +263,7 @@ export default async function PriceComparePage() {
       </div>
 
       {anomalies.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-4">
             <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -242,7 +278,7 @@ export default async function PriceComparePage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
         <div className="flex items-center gap-2 mb-6">
           <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -256,7 +292,7 @@ export default async function PriceComparePage() {
       </div>
 
       {topItems.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-4">
             <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

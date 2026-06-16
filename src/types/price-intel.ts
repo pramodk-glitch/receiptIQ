@@ -38,6 +38,7 @@ export interface ProductVariant {
   itemName: string;          // display (title-cased)
   storeChain: string;
   unitPrice: number;
+  unit?: string | null;
   capturedAt: string;
   isCheapest: boolean;
 }

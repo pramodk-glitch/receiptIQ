@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { extractReceiptFromImage, extractReceiptFromUrl, identifyStore, identifyStoreFromBuffer, extractReceiptFromPdfWithPrompt, getMediaType, RECEIPT_PROMPT } from "@/lib/claude";
 import { getFormatHints, saveFormatHints, buildTwoLineHint } from "@/lib/store-formats";
+import { learnReceiptPattern } from "@/lib/bedrock-pattern-learner";
 import type { OcrResult } from "@/lib/claude";
 
 // Math check: does qty × unit_price ≈ line_total?
@@ -75,6 +76,10 @@ export async function POST(request: NextRequest) {
 
       if (passRate >= 0.8 && storeName !== "Unknown") {
         await saveFormatHints(storeName, formatHints ?? "standard");
+        // Fire-and-forget: learn richer format hints via Bedrock
+        learnReceiptPattern(storeName, "", result.items).then(async (learned) => {
+          if (learned) await saveFormatHints(storeName, learned);
+        }).catch(() => {});
       }
 
       return NextResponse.json({ ...result, _storeName: storeName });
@@ -133,13 +138,15 @@ export async function POST(request: NextRequest) {
 
     // Step 5: If math is good and this is a known store, bump sample count
     if (passRate >= 0.8 && storeName !== "Unknown") {
-      // Only save if there are no pre-seeded hints already covering this store
-      // (avoids overwriting curated hints with a generic success marker)
       if (!formatHints) {
-        await saveFormatHints(storeName, "standard"); // marks store as seen + working
+        await saveFormatHints(storeName, "standard");
       } else {
-        await saveFormatHints(storeName, formatHints); // bump sample count
+        await saveFormatHints(storeName, formatHints);
       }
+      // Fire-and-forget: learn richer format hints via Bedrock
+      learnReceiptPattern(storeName, result.raw_text ?? "", result.items).then(async (learned) => {
+        if (learned) await saveFormatHints(storeName, learned);
+      }).catch(() => {});
     }
 
     return NextResponse.json({ ...result, _storeName: storeName });

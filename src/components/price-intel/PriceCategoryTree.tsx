@@ -35,30 +35,30 @@ function ProductRow({ product, open, onToggle }: { product: ProductGroup; open: 
   return (
     <div>
       <button onClick={onToggle}
-        className="w-full flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 transition-colors text-left">
-        <span className="text-slate-200 text-xs select-none pl-6">│</span>
-        <span className="text-slate-200 text-xs select-none">│</span>
+        className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 bg-white hover:bg-slate-50 transition-colors text-left">
+        <span className="text-slate-200 text-xs select-none pl-4 sm:pl-6 hidden xs:inline">│</span>
+        <span className="text-slate-200 text-xs select-none hidden sm:inline">│</span>
         <ToggleIcon open={open} />
-        <span className="flex-1 text-sm font-medium text-slate-700 truncate">{product.productGroup}</span>
+        <span className="flex-1 text-sm font-medium text-slate-700 truncate min-w-0">{product.productGroup}</span>
         {product.storeCount > 1 && (
-          <span className="shrink-0 text-xs text-slate-400">{product.storeCount} stores</span>
+          <span className="shrink-0 text-xs text-slate-400 hidden md:inline">{product.storeCount} stores</span>
         )}
         {savings && (
-          <span className="shrink-0 text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+          <span className="shrink-0 text-xs font-semibold text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full hidden sm:inline">
             Save ${savings}
           </span>
         )}
-        <span className="shrink-0 w-20 text-right"><TrendBadge trend={product.trend} /></span>
-        <span className="shrink-0 text-sm font-bold text-slate-800 w-16 text-right">
+        <span className="shrink-0 w-14 sm:w-20 text-right"><TrendBadge trend={product.trend} /></span>
+        <span className="shrink-0 text-sm font-bold text-slate-800 w-14 sm:w-16 text-right">
           ${product.minPrice.toFixed(2)}
         </span>
       </button>
 
       {open && (
-        <div className="ml-16 mr-4 mb-2 rounded-lg border border-slate-100 overflow-hidden bg-slate-50">
+        <div className="mx-2 sm:ml-16 sm:mr-4 mb-2 rounded-lg border border-slate-100 overflow-hidden bg-slate-50">
           {/* Trend detail */}
           {product.trend.previousPrice !== null && (
-            <div className={`px-4 py-1.5 text-xs flex items-center gap-2 border-b border-slate-100
+            <div className={`px-3 py-1.5 text-xs flex items-center gap-2 border-b border-slate-100
               ${product.trend.direction === "up" ? "bg-red-50 text-red-700"
               : product.trend.direction === "down" ? "bg-green-50 text-green-700"
               : "bg-slate-50 text-slate-500"}`}>
@@ -66,38 +66,45 @@ function ProductRow({ product, open, onToggle }: { product: ProductGroup; open: 
               <span>
                 ${product.trend.previousPrice.toFixed(2)} → ${product.trend.currentPrice.toFixed(2)}
                 {product.trend.previousDate && (
-                  <span className="ml-1 opacity-60">({product.trend.previousDate} → {product.trend.currentDate})</span>
+                  <span className="ml-1 opacity-60 hidden sm:inline">({product.trend.previousDate} → {product.trend.currentDate})</span>
                 )}
               </span>
             </div>
           )}
           {/* Variants table */}
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-slate-400 uppercase tracking-wide">
-                <th className="text-left px-4 py-1.5">Item</th>
-                <th className="text-left px-2 py-1.5">Store</th>
-                <th className="text-right px-4 py-1.5">Price</th>
-                <th className="text-right px-4 py-1.5 hidden sm:table-cell">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {product.variants.map((v, i) => (
-                <tr key={`${v.itemNameNormalized}-${v.storeChain}-${i}`}
-                  className={v.isCheapest ? "bg-green-50" : "bg-white"}>
-                  <td className="px-4 py-1.5 text-slate-700 max-w-[180px] truncate">
-                    {v.isCheapest && <span className="text-green-500 mr-1">★</span>}
-                    {v.itemName}
-                  </td>
-                  <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap">{v.storeChain}</td>
-                  <td className={`text-right px-4 py-1.5 font-semibold ${v.isCheapest ? "text-green-700" : "text-slate-800"}`}>
-                    ${v.unitPrice.toFixed(2)}
-                  </td>
-                  <td className="text-right px-4 py-1.5 text-slate-400 hidden sm:table-cell">{v.capturedAt}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[320px]">
+              <thead>
+                <tr className="text-slate-400 uppercase tracking-wide">
+                  <th className="text-left px-3 py-1.5">Item</th>
+                  <th className="text-left px-2 py-1.5 hidden sm:table-cell">Store</th>
+                  <th className="text-left px-2 py-1.5 sm:hidden">Store</th>
+                  <th className="text-right px-2 py-1.5">Unit</th>
+                  <th className="text-right px-3 py-1.5">Price</th>
+                  <th className="text-right px-3 py-1.5 hidden sm:table-cell">Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {product.variants.map((v, i) => (
+                  <tr key={`${v.itemNameNormalized}-${v.storeChain}-${i}`}
+                    className={v.isCheapest ? "bg-green-50" : "bg-white"}>
+                    <td className="px-3 py-1.5 text-slate-700 max-w-[140px] sm:max-w-[200px] truncate">
+                      {v.isCheapest && <span className="text-green-500 mr-1">★</span>}
+                      {v.itemName}
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap">{v.storeChain}</td>
+                    <td className="text-right px-2 py-1.5 text-slate-400 whitespace-nowrap">
+                      {v.unit ?? "—"}
+                    </td>
+                    <td className={`text-right px-3 py-1.5 font-semibold whitespace-nowrap ${v.isCheapest ? "text-green-700" : "text-slate-800"}`}>
+                      ${v.unitPrice.toFixed(2)}
+                    </td>
+                    <td className="text-right px-3 py-1.5 text-slate-400 hidden sm:table-cell whitespace-nowrap">{v.capturedAt}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -203,13 +210,13 @@ export function PriceCategoryTree({ data }: Props) {
             <div key={node.category} className="border border-slate-200 rounded-xl overflow-hidden">
               {/* Level 1 — Category */}
               <button onClick={() => setOpenCats(toggle(openCats, node.category))}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
+                className="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
                 <ToggleIcon open={catOpen} />
-                <span className="text-lg">{node.icon}</span>
-                <span className="font-semibold text-slate-800 flex-1">{node.category}</span>
-                <span className="text-xs text-slate-400 mr-1">{node.productCount} product{node.productCount !== 1 ? "s" : ""}</span>
+                <span className="text-lg shrink-0">{node.icon}</span>
+                <span className="font-semibold text-slate-800 flex-1 min-w-0 truncate">{node.category}</span>
+                <span className="text-xs text-slate-400 shrink-0">{node.productCount} product{node.productCount !== 1 ? "s" : ""}</span>
                 {multiStoreTotal > 0 && (
-                  <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0 hidden sm:inline">
                     {multiStoreTotal} multi-store
                   </span>
                 )}
@@ -225,13 +232,13 @@ export function PriceCategoryTree({ data }: Props) {
                       <div key={scKey}>
                         {/* Level 2 — Sub-category */}
                         <button onClick={() => setOpenSCs(toggle(openSCs, scKey))}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 hover:bg-slate-100 transition-colors text-left">
-                          <span className="text-slate-200 text-xs select-none pl-4">│</span>
+                          className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-slate-50/60 hover:bg-slate-100 transition-colors text-left">
+                          <span className="text-slate-200 text-xs select-none pl-2 sm:pl-4 hidden sm:inline">│</span>
                           <ToggleIcon open={scOpen} />
-                          <span className="flex-1 text-sm font-semibold text-slate-600">{sc.subCategory}</span>
-                          <span className="text-xs text-slate-400">{sc.productCount} product{sc.productCount !== 1 ? "s" : ""}</span>
+                          <span className="flex-1 text-sm font-semibold text-slate-600 min-w-0 truncate">{sc.subCategory}</span>
+                          <span className="text-xs text-slate-400 shrink-0">{sc.productCount} product{sc.productCount !== 1 ? "s" : ""}</span>
                           {sc.products.filter(p => p.storeCount > 1).length > 0 && (
-                            <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-1">
+                            <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-1 hidden sm:inline shrink-0">
                               {sc.products.filter(p => p.storeCount > 1).length} multi-store
                             </span>
                           )}
