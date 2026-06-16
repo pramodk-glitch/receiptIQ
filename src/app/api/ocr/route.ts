@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
         await saveFormatHints(storeName, formatHints);
       }
       // Fire-and-forget: learn richer format hints via Bedrock
-      learnReceiptPattern(storeName, result.raw_text ?? "", result.items).then(async (learned) => {
+      learnReceiptPattern(storeName, "", result.items).then(async (learned) => {
         if (learned) await saveFormatHints(storeName, learned);
       }).catch(() => {});
     }
