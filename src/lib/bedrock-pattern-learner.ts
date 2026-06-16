@@ -28,7 +28,7 @@ export async function learnReceiptPattern(
 
   const itemSummary = items
     .slice(0, 15)
-    .map(i => `  • "${i.item_name}" qty=${i.quantity} unit_price=${i.unit_price} total=${i.line_total} unit=${i.unit ?? ""}`)
+    .map(i => `  • "${i.item_name}" qty=${i.quantity} unit_price=${i.unit_price} total=${i.line_total}`)
     .join("\n");
 
   const rawSection = rawText?.trim()
