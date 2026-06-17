@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PriceTrendChart } from "@/components/price-intel/PriceTrendChart";
 import { PriceAlertCard } from "@/components/price-intel/PriceAlertCard";
 import { PriceCategoryTree } from "@/components/price-intel/PriceCategoryTree";
+import { ReclassifyButton } from "@/components/price-intel/ReclassifyButton";
 import type { CategoryNode, SubCategoryNode, ProductGroup, ProductVariant, PriceTrend } from "@/types/price-intel";
 import { SUBCATEGORY_TAXONOMY } from "@/lib/product-classifier";
 
@@ -255,11 +256,14 @@ export default async function PriceComparePage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Price Intelligence</h1>
-        <p className="text-slate-500 mt-1">
-          Track price trends, compare stores, and spot price changes over time.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-slate-900">Price Intelligence</h1>
+          <p className="text-slate-500 mt-1">
+            Track price trends, compare stores, and spot price changes over time.
+          </p>
+        </div>
+        <ReclassifyButton />
       </div>
 
       {anomalies.length > 0 && (
