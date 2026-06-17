@@ -143,10 +143,17 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
       const products: ProductGroup[] = [];
 
       for (const [pg, entries] of Array.from(pgMap.entries())) {
+        // Keep the most-recent entry per (item, store) — entries are already
+        // ordered by capturedAt DESC so the first one we see is the newest.
         const variantMap = new Map<string, typeof entries[number]>();
         for (const e of entries) {
           const vk = `${e.itemNameNormalized}__${e.storeChain}`;
-          if (!variantMap.has(vk)) variantMap.set(vk, e);
+          // Prefer entry that has a unit value
+          if (!variantMap.has(vk)) {
+            variantMap.set(vk, e);
+          } else if (!variantMap.get(vk)!.unit && e.unit) {
+            variantMap.set(vk, e);
+          }
         }
 
         const allPrices = entries.map(e => ({ unitPrice: Number(e.unitPrice), capturedAt: e.capturedAt }));
@@ -164,7 +171,12 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
 
         const minPrice = Math.min(...variantList.map(v => v.unitPrice));
         variantList.forEach(v => { v.isCheapest = v.unitPrice === minPrice; });
-        variantList.sort((a, b) => a.unitPrice - b.unitPrice);
+        // Primary: cheapest first. Secondary: newest date first within same price.
+        variantList.sort((a, b) =>
+          a.unitPrice !== b.unitPrice
+            ? a.unitPrice - b.unitPrice
+            : b.capturedAt.localeCompare(a.capturedAt)
+        );
 
         const stores = Array.from(new Set(variantList.map(v => v.storeChain)));
 

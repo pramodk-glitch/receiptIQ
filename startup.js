@@ -260,6 +260,27 @@ async function main() {
     console.error("PriceHistory.receiptId column error (non-fatal):", e.message);
   }
 
+  // ── 3b. Backfill PriceHistory.unit from ReceiptItem ─────────────────────
+  try {
+    await prisma.$executeRaw`ALTER TABLE "PriceHistory" ADD COLUMN IF NOT EXISTS unit TEXT`;
+    const unitCount = await prisma.$executeRaw`
+      UPDATE "PriceHistory" ph
+      SET unit = ri.unit
+      FROM (
+        SELECT DISTINCT ON (ri."receiptId", ri."itemNameNormalized")
+          ri."receiptId", ri."itemNameNormalized", ri.unit
+        FROM "ReceiptItem" ri
+        WHERE ri.unit IS NOT NULL AND ri.unit != ''
+      ) ri
+      WHERE ph."receiptId"         = ri."receiptId"
+        AND ph."itemNameNormalized" = ri."itemNameNormalized"
+        AND ph.unit IS NULL
+    `;
+    if (unitCount > 0) console.log(\`Backfilled \${unitCount} PriceHistory rows with units\`);
+  } catch (e) {
+    console.error("Unit backfill error (non-fatal):", e.message);
+  }
+
   // ── 4. Backfill PriceHistory.category ────────────────────────────────────
   try {
     const count = await prisma.$executeRaw`

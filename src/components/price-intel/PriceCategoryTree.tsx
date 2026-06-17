@@ -35,9 +35,7 @@ function ProductRow({ product, open, onToggle }: { product: ProductGroup; open: 
   return (
     <div>
       <button onClick={onToggle}
-        className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 bg-white hover:bg-slate-50 transition-colors text-left">
-        <span className="text-slate-200 text-xs select-none pl-4 sm:pl-6 hidden xs:inline">│</span>
-        <span className="text-slate-200 text-xs select-none hidden sm:inline">│</span>
+        className="w-full flex items-center gap-2 pl-8 pr-3 sm:pl-10 sm:pr-4 py-2 bg-white hover:bg-slate-50 transition-colors text-left">
         <ToggleIcon open={open} />
         <span className="flex-1 text-sm font-medium text-slate-700 truncate min-w-0">{product.productGroup}</span>
         {product.storeCount > 1 && (
@@ -232,8 +230,7 @@ export function PriceCategoryTree({ data }: Props) {
                       <div key={scKey}>
                         {/* Level 2 — Sub-category */}
                         <button onClick={() => setOpenSCs(toggle(openSCs, scKey))}
-                          className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-slate-50/60 hover:bg-slate-100 transition-colors text-left">
-                          <span className="text-slate-200 text-xs select-none pl-2 sm:pl-4 hidden sm:inline">│</span>
+                          className="w-full flex items-center gap-2 pl-4 pr-3 sm:pl-5 sm:pr-4 py-2.5 bg-slate-50/60 hover:bg-slate-100 transition-colors text-left">
                           <ToggleIcon open={scOpen} />
                           <span className="flex-1 text-sm font-semibold text-slate-600 min-w-0 truncate">{sc.subCategory}</span>
                           <span className="text-xs text-slate-400 shrink-0">{sc.productCount} product{sc.productCount !== 1 ? "s" : ""}</span>
