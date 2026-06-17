@@ -50,12 +50,16 @@ const CATEGORY_ORDER = [
   "Electronics", "Dining", "Travel", "Entertainment", "General",
 ];
 
-// Try to extract a unit from the item name when the DB has no unit recorded.
-// Looks for weight/volume patterns like "2lb", "12oz", "1kg", "500ml".
+// Extract quantity+unit from item name when DB has no unit recorded.
+// Returns the full string e.g. "2lb", "12oz", "900ct", "1 pack".
 function inferUnit(itemName: string): string | null {
-  const m = itemName.match(/\b(\d+(?:\.\d+)?)\s*(lb|lbs|oz|kg|g\b|ml|l\b|fl oz|gal|ct|pk|pcs?)\b/i);
-  if (m) return m[2].toLowerCase().replace("lbs", "lb").replace("pcs", "pc");
-  return null;
+  const m = itemName.match(/\b(\d+(?:\.\d+)?)\s*(lb|lbs|oz|fl oz|kg|g|ml|gal|ct|pk|pack|pcs?|count|gallon)\b/i);
+  if (!m) return null;
+  const qty  = m[1];
+  const unit = m[2].toLowerCase()
+    .replace("lbs", "lb").replace("pcs", "pc")
+    .replace("pack", "pk").replace("count", "ct").replace("gallon", "gal");
+  return qty + unit;
 }
 
 function toTitleCase(s: string) {

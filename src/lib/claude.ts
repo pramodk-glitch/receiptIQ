@@ -150,7 +150,7 @@ item_name rules:
 - Keep size/variety info that is part of the name.
 
 quantity: the number printed BEFORE "@" on the price line. Never the item number.
-unit: the unit of measure — "lb", "kg", "oz", "ea", "pk", "ct", or similar if visible; omit or use "" if not shown.
+unit: the quantity + unit of measure as it appears on the receipt — e.g. "2lb", "12oz", "1pk", "900ct", "64fl oz"; omit or use "" if not shown.
 unit_price: the number printed AFTER "@" on the price line.
 line_total: the rightmost dollar amount on the price line.
 
