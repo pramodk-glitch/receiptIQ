@@ -43,7 +43,9 @@ export async function POST() {
   console.log(`[Reclassify] Starting reclassification of ${rows.length} unique items for user ${userId}`);
 
   // 2. Pre-fetch store hints for all stores in one pass
-  const storeChains = Array.from(new Set(rows.map(r => r.storeChain).filter(Boolean)));
+  const seenChains: Record<string, true> = {};
+  rows.forEach(r => { if (r.storeChain) seenChains[r.storeChain] = true; });
+  const storeChains = Object.keys(seenChains);
   const hintsMap = new Map<string, string | null>();
   await Promise.all(storeChains.map(async (sc) => {
     hintsMap.set(sc, await getCategoryHints(sc));
