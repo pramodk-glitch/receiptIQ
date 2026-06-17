@@ -18,18 +18,6 @@ import type { ClassificationResult } from "./product-classifier";
 type Rule = [string[], string, string];
 
 const RULES: Rule[] = [
-  // ── Packaged-food overrides — must appear BEFORE single-ingredient keywords ──
-  // These catch items like "Banana Nut Crunch Cereal" before "banana" fires.
-  [["cereal", "corn flakes", "cheerio", "breakfast flakes"], "Cereal",    "Cereals & Grains"],
-  [["granola bar", "granola bite", "energy bar", "protein bar"], "Granola Bar", "Snacks & Chips"],
-  [["banana bread", "banana muffin", "banana cake", "banana nut bread"], "Banana Bread", "Bakery & Bread"],
-  [["banana chip"],                                 "Banana Chips",       "Snacks & Chips"],
-  [["banana pudding", "banana cream"],              "Banana Pudding",     "Snacks & Chips"],
-  [["lemon cake", "lemon muffin", "lemon cookie", "lemon bar"],  "Lemon Baked Good", "Bakery & Bread"],
-  [["apple pie", "apple cake", "apple muffin", "apple sauce", "applesauce"], "Apple Baked Good", "Bakery & Bread"],
-  [["orange juice", "oj "],                         "Orange Juice",       "Beverages"],
-  [["grape juice", "grape drink"],                  "Grape Juice",        "Beverages"],
-
   // ── Produce — Fruits ─────────────────────────────────────────────────────
   [["banana", "plantain"],                          "Banana",             "Produce — Fruits"],
   [["apple", "gala", "fuji", "granny smith", "cosmic crisp", "honeycrisp"], "Apple", "Produce — Fruits"],
@@ -249,9 +237,35 @@ function stripBrands(name: string): string {
   return n.replace(/\s{2,}/g, " ").trim();
 }
 
+// Words that signal a packaged/processed product — their presence means the
+// item is not raw produce even if a fruit/vegetable keyword also appears.
+const PACKAGED_SIGNALS = [
+  "cereal", "granola", "bar", "crunch", "flakes", "chips", "crisps",
+  "cookie", "cracker", "muffin", "cake", "bread", "pudding", "pie",
+  "sauce", "juice", "jam", "jelly", "yogurt", "smoothie", "drink",
+  "mix", "powder", "extract", "flavored", "flavour", "gummy",
+];
+
+// Sub-categories whose rules are ingredient-level and can fire incorrectly on
+// packaged products that merely contain the ingredient as a flavour.
+const PRODUCE_SUBCATS = new Set(["Produce — Fruits", "Produce — Vegetables"]);
+
 export function classifyByKeyword(itemName: string): ClassificationResult | null {
   const clean = stripBrands(itemName);
+
+  // Count meaningful words to gauge name complexity.
+  const wordCount = clean.split(/\s+/).filter(w => w.length > 1).length;
+
+  // Long names (4+ words) are complex packaged products. Skip straight to
+  // Claude so it can use full context rather than substring guessing.
+  if (wordCount >= 4) return null;
+
+  // Even for short names, don't fire produce rules if a packaged-product
+  // signal word is present (e.g. "Banana Chips", "Apple Juice").
+  const hasPackagedSignal = PACKAGED_SIGNALS.some(s => clean.includes(s));
+
   for (const [keywords, productGroup, subCategory] of RULES) {
+    if (hasPackagedSignal && PRODUCE_SUBCATS.has(subCategory)) continue;
     for (const kw of keywords) {
       if (clean.includes(kw)) {
         return { productGroup, subCategory };

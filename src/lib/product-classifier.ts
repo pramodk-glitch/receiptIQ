@@ -103,16 +103,28 @@ Item: "${itemName}"
 Top-level category: ${category}
 
 Rules:
-1. productGroup — the short generic product name (1-4 words, title case).
+1. productGroup — the PRODUCT TYPE, not an ingredient or flavour (1-4 words, title case).
+   CRITICAL: If an ingredient word (fruit, vegetable, spice) appears in the name of a
+   packaged/processed product, use the PRODUCT TYPE, not the ingredient.
    - Strip ALL store brand names: ${STORE_BRANDS.slice(0, 8).join(", ")}, etc.
    - Strip sizes, weights, counts, and package descriptors.
-   - Examples: "Vitamin D Whole Milk - 1gal - Good & Gather™" → "Milk"
-               "Fresh Broccoli Florets 12oz - Good & Gather" → "Broccoli"
-               "Pringles Snack Cups Variety Pack 12.9oz/18ct" → "Potato Chips"
-               "Perdue Thin Sliced Antibiotic Free Chicken Breast 1.3lbs" → "Chicken Breast"
-               "Frozen Crispy Hash Brown Potato Patties - Market Pantry™" → "Hash Browns"
-               "Laxmi Idly Rice 20lb" → "Rice"
-               "Chinese Broom" → "Broom"
+
+   Examples — CORRECT:
+     "Vitamin D Whole Milk 1gal Good & Gather™"       → "Milk"
+     "Post Great Grains Banana Nut Crunch Cereal 18oz" → "Breakfast Cereal"
+     "Tropicana Orange Juice 52oz"                     → "Orange Juice"
+     "Welch's Grape Jam 18oz"                          → "Jam"
+     "Lemon Pepper Seasoning 6oz"                      → "Seasoning"
+     "Banana Republic Lip Balm"                        → "Lip Balm"
+     "Fresh Broccoli Florets 12oz"                     → "Broccoli"
+     "Pringles Snack Cups Variety Pack 18ct"           → "Potato Chips"
+     "Perdue Thin Sliced Chicken Breast 1.3lbs"        → "Chicken Breast"
+     "Frozen Hash Brown Potato Patties Market Pantry™" → "Hash Browns"
+     "Laxmi Idly Rice 20lb"                            → "Rice"
+     "Chinese Broom"                                   → "Broom"
+     "Kirkland Signature Baby Wipes 900ct"             → "Baby Wipes"
+     "Colgate Total Whitening Toothpaste 4oz"          → "Toothpaste"
+     "Apple Watch Series 9"                            → "Smartwatch"
 
 2. subCategory — pick EXACTLY one from this list:
 ${subCats.map(s => `   - ${s}`).join("\n")}
@@ -128,7 +140,7 @@ Return: {"productGroup":"string","subCategory":"string"}`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5",
-        max_tokens: 60,
+        max_tokens: 80,
         messages: [{ role: "user", content: prompt }],
       }),
     });
