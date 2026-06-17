@@ -78,6 +78,7 @@ const cache = new Map<string, ClassificationResult>();
 export async function classifyItem(
   itemName: string,
   category: string,
+  storeHints?: string | null,
 ): Promise<ClassificationResult> {
   const key = `${category}:${itemName.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key)!;
@@ -97,8 +98,12 @@ export async function classifyItem(
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return fallback;
 
-    const prompt = `Classify this retail item and return ONLY a JSON object, no other text.
+    const storeContext = storeHints
+      ? `\nStore-specific naming patterns (use these to improve accuracy):\n${storeHints}\n`
+      : "";
 
+    const prompt = `Classify this retail item and return ONLY a JSON object, no other text.
+${storeContext}
 Item: "${itemName}"
 Top-level category: ${category}
 

@@ -74,6 +74,17 @@ model StoreFormat {
   @@index([storeName])
 }
 
+model StoreCategoryHints {
+  id          String   @id @default(uuid())
+  storeChain  String   @unique
+  hints       String   // agent-written cheat sheet injected into classification prompts
+  itemCount   Int      @default(0)
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([storeChain])
+}
+
 model PriceHistory {
   id                 String   @id @default(uuid())
   itemNameNormalized String

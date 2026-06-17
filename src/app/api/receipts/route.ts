@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import crypto from "crypto";
 import { classifyItem } from "@/lib/product-classifier";
 import { classifyByKeyword } from "@/lib/local-classifier";
+import { getCategoryHints } from "@/lib/store-category-hints";
+import { learnCategoryPatterns } from "@/lib/category-learner";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -117,6 +119,10 @@ export async function POST(request: NextRequest) {
 
     // ── Classify items BEFORE the transaction so API calls don't cause timeout ──
     const sc = storeChain ? String(storeChain).trim() : "";
+
+    // Fetch learned category hints for this store (if any) to inject into Claude
+    const storeHints = sc ? await getCategoryHints(sc) : null;
+    if (storeHints) console.log(`[Receipts] Using learned category hints for "${sc}`);
     type ItemRow = {
       receiptId: string; userId: string; itemName: string; itemNameNormalized: string;
       quantity: number; unitPrice: number; lineTotal: number;
@@ -151,7 +157,7 @@ export async function POST(request: NextRequest) {
         if (kw) return { ...base, productGroup: kw.productGroup, subCategory: kw.subCategory };
 
         // Tier 3: Claude Haiku (only for truly unknown items)
-        const cls = await classifyItem(String(item.itemName), cat).catch(() => null);
+        const cls = await classifyItem(String(item.itemName), cat, storeHints).catch(() => null);
         return { ...base, productGroup: cls?.productGroup ?? null, subCategory: cls?.subCategory ?? null };
       })
     );
@@ -197,6 +203,16 @@ export async function POST(request: NextRequest) {
 
       return newReceipt;
     });
+
+    // Fire-and-forget: teach the category learner agent from this receipt
+    if (sc && itemRows.length > 0) {
+      learnCategoryPatterns(sc, itemRows.map(r => ({
+        itemName: r.itemName,
+        productGroup: r.productGroup,
+        subCategory: r.subCategory,
+        category: r.category,
+      }))).catch(() => {});
+    }
 
     return NextResponse.json({ id: receipt.id }, { status: 201 });
   } catch (err) {

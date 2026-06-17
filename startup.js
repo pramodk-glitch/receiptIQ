@@ -187,6 +187,25 @@ async function main() {
 
   try {
     await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "StoreCategoryHints" (
+        id            TEXT        NOT NULL PRIMARY KEY,
+        "storeChain"  TEXT        NOT NULL UNIQUE,
+        hints         TEXT        NOT NULL,
+        "itemCount"   INTEGER     NOT NULL DEFAULT 0,
+        "lastUpdated" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS "StoreCategoryHints_storeChain_idx" ON "StoreCategoryHints"("storeChain")
+    `;
+    console.log("StoreCategoryHints table ensured");
+  } catch (e) {
+    console.error("StoreCategoryHints table error (non-fatal):", e.message);
+  }
+
+  try {
+    await prisma.$executeRaw`
       ALTER TABLE "PriceHistory"
         ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General'
     `;
