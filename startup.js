@@ -276,7 +276,7 @@ async function main() {
         AND ph."itemNameNormalized" = ri."itemNameNormalized"
         AND ph.unit IS NULL
     `;
-    if (unitCount > 0) console.log(\`Backfilled \${unitCount} PriceHistory rows with units\`);
+    if (unitCount > 0) console.log("Backfilled " + unitCount + " PriceHistory rows with units");
   } catch (e) {
     console.error("Unit backfill error (non-fatal):", e.message);
   }
