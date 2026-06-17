@@ -18,6 +18,18 @@ import type { ClassificationResult } from "./product-classifier";
 type Rule = [string[], string, string];
 
 const RULES: Rule[] = [
+  // ── Packaged-food overrides — must appear BEFORE single-ingredient keywords ──
+  // These catch items like "Banana Nut Crunch Cereal" before "banana" fires.
+  [["cereal", "corn flakes", "cheerio", "breakfast flakes"], "Cereal",    "Cereals & Grains"],
+  [["granola bar", "granola bite", "energy bar", "protein bar"], "Granola Bar", "Snacks & Chips"],
+  [["banana bread", "banana muffin", "banana cake", "banana nut bread"], "Banana Bread", "Bakery & Bread"],
+  [["banana chip"],                                 "Banana Chips",       "Snacks & Chips"],
+  [["banana pudding", "banana cream"],              "Banana Pudding",     "Snacks & Chips"],
+  [["lemon cake", "lemon muffin", "lemon cookie", "lemon bar"],  "Lemon Baked Good", "Bakery & Bread"],
+  [["apple pie", "apple cake", "apple muffin", "apple sauce", "applesauce"], "Apple Baked Good", "Bakery & Bread"],
+  [["orange juice", "oj "],                         "Orange Juice",       "Beverages"],
+  [["grape juice", "grape drink"],                  "Grape Juice",        "Beverages"],
+
   // ── Produce — Fruits ─────────────────────────────────────────────────────
   [["banana", "plantain"],                          "Banana",             "Produce — Fruits"],
   [["apple", "gala", "fuji", "granny smith", "cosmic crisp", "honeycrisp"], "Apple", "Produce — Fruits"],
@@ -132,7 +144,6 @@ const RULES: Rule[] = [
   [["rice", "basmati", "jasmine rice", "brown rice"], "Rice",             "Cereals & Grains"],
   [["idly rice", "idli rice"],                      "Idly Rice",          "Cereals & Grains"],
   [["oat", "oatmeal", "granola"],                   "Oats",               "Cereals & Grains"],
-  [["cereal", "corn flakes", "cheerio"],            "Cereal",             "Cereals & Grains"],
   [["pasta", "spaghetti", "noodle", "macaroni"],    "Pasta",              "Cereals & Grains"],
   [["flour", "atta", "maida", "besan", "chickpea flour"], "Flour",        "Cereals & Grains"],
   [["bread", "toast", "baguette", "sourdough", "chapati", "roti", "pita"], "Bread", "Bakery & Bread"],
@@ -153,7 +164,6 @@ const RULES: Rule[] = [
   [["chip", "crisp", "pringles", "doritos", "cheeto", "cheez-it"], "Chips", "Snacks & Chips"],
   [["popcorn"],                                     "Popcorn",            "Snacks & Chips"],
   [["pretzel"],                                     "Pretzels",           "Snacks & Chips"],
-  [["granola bar", "granola bite", "energy bar", "protein bar"], "Granola Bar", "Snacks & Chips"],
   [["cracker"],                                     "Crackers",           "Snacks & Chips"],
   [["peanut", "almond", "cashew", "walnut", "pistachio", "mixed nut"], "Nuts", "Snacks & Chips"],
   [["chocolate", "candy", "sweet", "gummy"],        "Candy",              "Snacks & Chips"],

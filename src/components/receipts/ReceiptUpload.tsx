@@ -124,7 +124,7 @@ export function ReceiptUpload() {
         receipt_date: string;
         total_amount: number;
         currency: string;
-        items: { item_name: string; quantity: number; unit_price: number; line_total: number; category: string }[];
+        items: { item_name: string; quantity: number; unit_price: number; line_total: number; category: string; unit?: string | null }[];
       };
       let ocrData: OcrResult | null = null;
       let ocrErrorText: string | null = null;
@@ -189,6 +189,7 @@ export function ReceiptUpload() {
           items: ocrData?.items?.map((item) => ({
             itemName: item.item_name,
             quantity: item.quantity,
+            unit: item.unit ?? null,
             unitPrice: item.unit_price,
             lineTotal: item.line_total,
             category: item.category,

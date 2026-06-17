@@ -12,6 +12,7 @@ export interface OcrLineItem {
   unit_price: number;
   line_total: number;
   category: string;
+  unit?: string | null;  // e.g. "lb", "kg", "ea", "oz"
 }
 
 export interface OcrResult {
@@ -82,7 +83,7 @@ function validateOcrResult(data: unknown): OcrResult {
   };
 
   if (Array.isArray(obj.items)) {
-    type RawItem = { item_name: string; quantity: number; unit_price: number; line_total: number; category: string };
+    type RawItem = { item_name: string; quantity: number; unit_price: number; line_total: number; category: string; unit?: string | null };
 
     const raw: RawItem[] = obj.items
       .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
@@ -92,6 +93,7 @@ function validateOcrResult(data: unknown): OcrResult {
         unit_price: typeof item.unit_price === "number" ? item.unit_price : 0,
         line_total: typeof item.line_total === "number" ? item.line_total : 0,
         category:   normalizeCategory(typeof item.category === "string" ? item.category : "General"),
+        unit:       typeof item.unit === "string" && item.unit.trim() ? item.unit.trim().toLowerCase() : null,
       }));
 
     // Detect the "price line shifted by one" pattern:
@@ -133,7 +135,7 @@ function validateOcrResult(data: unknown): OcrResult {
 
 export const RECEIPT_PROMPT = `Extract all purchased items from this receipt and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
-{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit_price":number,"line_total":number,"category":"string"}]}
+{"store_name":"string","store_chain":"string","receipt_date":"YYYY-MM-DD","total_amount":number,"currency":"USD","items":[{"item_name":"string","quantity":number,"unit":"string","unit_price":number,"line_total":number,"category":"string"}]}
 
 STEP 1 — Read each item number (1, 2, 3 …) printed on the left. Each number marks the start of one purchased item.
 
@@ -148,6 +150,7 @@ item_name rules:
 - Keep size/variety info that is part of the name.
 
 quantity: the number printed BEFORE "@" on the price line. Never the item number.
+unit: the unit of measure — "lb", "kg", "oz", "ea", "pk", "ct", or similar if visible; omit or use "" if not shown.
 unit_price: the number printed AFTER "@" on the price line.
 line_total: the rightmost dollar amount on the price line.
 
