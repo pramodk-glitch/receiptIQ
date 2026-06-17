@@ -50,6 +50,14 @@ const CATEGORY_ORDER = [
   "Electronics", "Dining", "Travel", "Entertainment", "General",
 ];
 
+// Try to extract a unit from the item name when the DB has no unit recorded.
+// Looks for weight/volume patterns like "2lb", "12oz", "1kg", "500ml".
+function inferUnit(itemName: string): string | null {
+  const m = itemName.match(/\b(\d+(?:\.\d+)?)\s*(lb|lbs|oz|kg|g\b|ml|l\b|fl oz|gal|ct|pk|pcs?)\b/i);
+  if (m) return m[2].toLowerCase().replace("lbs", "lb").replace("pcs", "pc");
+  return null;
+}
+
 function toTitleCase(s: string) {
   return s.replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
 }
@@ -164,19 +172,15 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
           itemName: toTitleCase(e.itemNameNormalized.replace(/[™®©]/g, "")),
           storeChain: e.storeChain,
           unitPrice: Number(e.unitPrice),
-          unit: e.unit ?? null,
+          unit: e.unit ?? inferUnit(e.itemNameNormalized),
           capturedAt: e.capturedAt,
           isCheapest: false,
         }));
 
         const minPrice = Math.min(...variantList.map(v => v.unitPrice));
         variantList.forEach(v => { v.isCheapest = v.unitPrice === minPrice; });
-        // Primary: cheapest first. Secondary: newest date first within same price.
-        variantList.sort((a, b) =>
-          a.unitPrice !== b.unitPrice
-            ? a.unitPrice - b.unitPrice
-            : b.capturedAt.localeCompare(a.capturedAt)
-        );
+        // Sort by newest date first; price shown in its own column
+        variantList.sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
 
         const stores = Array.from(new Set(variantList.map(v => v.storeChain)));
 
