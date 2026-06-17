@@ -19,7 +19,8 @@ type Rule = [string[], string, string];
 
 const RULES: Rule[] = [
   // ── Produce — Fruits ─────────────────────────────────────────────────────
-  [["banana", "plantain"],                          "Banana",             "Produce — Fruits"],
+  [["banana"],                                      "Banana",             "Produce — Fruits"],
+  [["plantain"],                                    "Plantain",           "Produce — Fruits"],
   [["apple", "gala", "fuji", "granny smith", "cosmic crisp", "honeycrisp"], "Apple", "Produce — Fruits"],
   [["orange", "clementine", "mandarin", "tangerine", "satsuma"], "Oranges", "Produce — Fruits"],
   [["grape", "raisin"],                             "Grapes",             "Produce — Fruits"],

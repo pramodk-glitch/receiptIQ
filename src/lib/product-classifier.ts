@@ -163,11 +163,67 @@ Return: {"productGroup":"string","subCategory":"string"}`;
                       : fallback.subCategory,
     };
 
-    cache.set(key, result);
-    return result;
+    // Safety net: if Claude returned a raw produce group but the item name
+    // contains clear packaged-food signals, override with a derived type.
+    // This catches cases like "Banana Nut Crunch Cereal" → "Banana".
+    const sanitized = sanitizeProduceMisclassification(itemName, result);
+
+    cache.set(key, sanitized);
+    return sanitized;
   } catch {
     return fallback;
   }
+}
+
+// Raw produce groups that can be wrongly assigned to packaged/flavoured products
+const PRODUCE_GROUPS = new Set([
+  "Banana", "Apple", "Orange", "Grape", "Lemon", "Lime", "Strawberry",
+  "Blueberry", "Raspberry", "Blackberry", "Mango", "Pineapple", "Cherry",
+  "Peach", "Pear", "Watermelon", "Melon", "Avocado", "Tomato", "Potato",
+  "Onion", "Garlic", "Broccoli", "Spinach", "Carrot", "Cucumber", "Pepper",
+  "Cauliflower", "Lettuce", "Corn", "Mushroom", "Eggplant", "Zucchini",
+]);
+
+// If a packaged-food signal is present alongside a produce group, derive a
+// better productGroup from the dominant signal word.
+const SIGNAL_MAP: Array<[string, string, string]> = [
+  // [signal keyword, productGroup override, subCategory override]
+  ["cereal",      "Breakfast Cereal", "Cereals & Grains"],
+  ["granola",     "Granola",          "Cereals & Grains"],
+  ["oatmeal",     "Oatmeal",          "Cereals & Grains"],
+  ["juice",       "Fruit Juice",      "Beverages"],
+  ["jam",         "Jam",              "Condiments & Spices"],
+  ["jelly",       "Jelly",            "Condiments & Spices"],
+  ["sauce",       "Sauce",            "Condiments & Spices"],
+  ["chips",       "Chips",            "Snacks & Chips"],
+  ["chip",        "Chips",            "Snacks & Chips"],
+  ["bar",         "Snack Bar",        "Snacks & Chips"],
+  ["bread",       "Bread",            "Bakery & Bread"],
+  ["muffin",      "Muffin",           "Bakery & Bread"],
+  ["cake",        "Cake",             "Bakery & Bread"],
+  ["cookie",      "Cookie",           "Bakery & Bread"],
+  ["pie",         "Pie",              "Bakery & Bread"],
+  ["smoothie",    "Smoothie",         "Beverages"],
+  ["drink",       "Fruit Drink",      "Beverages"],
+  ["yogurt",      "Yogurt",           "Dairy & Eggs"],
+  ["pudding",     "Pudding",          "Snacks & Chips"],
+  ["extract",     "Flavoring",        "Condiments & Spices"],
+  ["flavored",    "Flavored Snack",   "Snacks & Chips"],
+];
+
+function sanitizeProduceMisclassification(
+  itemName: string,
+  result: ClassificationResult,
+): ClassificationResult {
+  if (!PRODUCE_GROUPS.has(result.productGroup)) return result;
+
+  const lower = itemName.toLowerCase();
+  for (const [signal, pgOverride, scOverride] of SIGNAL_MAP) {
+    if (lower.includes(signal)) {
+      return { productGroup: pgOverride, subCategory: scOverride };
+    }
+  }
+  return result;
 }
 
 function buildFallback(itemName: string, category: string): ClassificationResult {
