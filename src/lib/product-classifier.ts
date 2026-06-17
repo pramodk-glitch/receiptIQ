@@ -75,6 +75,10 @@ export interface ClassificationResult {
 // Per-process cache — avoids duplicate API calls for same item within one run
 const cache = new Map<string, ClassificationResult>();
 
+export function clearClassificationCache() {
+  cache.clear();
+}
+
 export async function classifyItem(
   itemName: string,
   category: string,
@@ -211,7 +215,7 @@ const SIGNAL_MAP: Array<[string, string, string]> = [
   ["flavored",    "Flavored Snack",   "Snacks & Chips"],
 ];
 
-function sanitizeProduceMisclassification(
+export function sanitizeProduceMisclassification(
   itemName: string,
   result: ClassificationResult,
 ): ClassificationResult {

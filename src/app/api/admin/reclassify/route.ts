@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { classifyItem } from "@/lib/product-classifier";
+import { classifyItem, clearClassificationCache, sanitizeProduceMisclassification } from "@/lib/product-classifier";
 import { classifyByKeyword } from "@/lib/local-classifier";
 import { getCategoryHints } from "@/lib/store-category-hints";
 import { learnCategoryPatterns } from "@/lib/category-learner";
@@ -39,6 +39,10 @@ export async function POST() {
   if (rows.length === 0) {
     return NextResponse.json({ updated: 0, message: "No items to reclassify" });
   }
+
+  // Clear the in-process classification cache so stale results from earlier
+  // in this server session don't block re-classification.
+  clearClassificationCache();
 
   console.log(`[Reclassify] Starting reclassification of ${rows.length} unique items for user ${userId}`);
 
@@ -79,6 +83,13 @@ export async function POST() {
           const cls = await classifyItem(displayName, row.category, storeHints).catch(() => null);
           productGroup = cls?.productGroup ?? null;
           subCategory  = cls?.subCategory  ?? null;
+        }
+
+        // Apply safety net regardless of which tier classified it
+        if (productGroup && subCategory) {
+          const safe = sanitizeProduceMisclassification(displayName, { productGroup, subCategory });
+          productGroup = safe.productGroup;
+          subCategory  = safe.subCategory;
         }
 
         if (productGroup && subCategory) {
