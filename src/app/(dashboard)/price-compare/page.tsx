@@ -159,7 +159,12 @@ async function getCategoryNodes(userId: string): Promise<CategoryNode[]> {
         // ordered by capturedAt DESC so the first one we see is the newest.
         const variantMap = new Map<string, typeof entries[number]>();
         for (const e of entries) {
-          const vk = `${e.itemNameNormalized}__${e.storeChain}`;
+          // Normalise "2 lb" vs "2lb" differences introduced by OCR variance
+          const normKey = e.itemNameNormalized.replace(
+            /(\d+(?:\.\d+)?)\s+(lb|lbs|oz|fl\s*oz|kg|g|ml|gal|ct|pk|pack|count|gallon)/gi,
+            (_, n, u) => n + u.replace(/\s+/g, "").toLowerCase(),
+          );
+          const vk = `${normKey}__${e.storeChain}`;
           // Prefer entry that has a unit value
           if (!variantMap.has(vk)) {
             variantMap.set(vk, e);
