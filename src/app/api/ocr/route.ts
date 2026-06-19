@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getAuthUserId } from "@/lib/unified-auth";
 import { extractReceiptFromImage, extractReceiptFromUrl, identifyStore, identifyStoreFromBuffer, extractReceiptFromPdfWithPrompt, getMediaType, RECEIPT_PROMPT } from "@/lib/claude";
 import { getFormatHints, saveFormatHints, buildTwoLineHint } from "@/lib/store-formats";
 import { learnReceiptPattern } from "@/lib/bedrock-pattern-learner";
@@ -18,8 +18,8 @@ function mathPassRate(result: OcrResult) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getAuthUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

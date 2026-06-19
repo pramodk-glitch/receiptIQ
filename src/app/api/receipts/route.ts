@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getAuthUserId } from "@/lib/unified-auth";
 import { prisma } from "@/lib/db";
 import crypto from "crypto";
 import { classifyItem } from "@/lib/product-classifier";
@@ -8,10 +8,8 @@ import { getCategoryHints } from "@/lib/store-category-hints";
 import { learnCategoryPatterns } from "@/lib/category-learner";
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getAuthUserId(request);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get("page") ?? "1", 10);
@@ -20,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const [receipts, total] = await Promise.all([
     prisma.receipt.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { receiptDate: "desc" },
       skip,
       take: limit,
@@ -28,7 +26,7 @@ export async function GET(request: NextRequest) {
         _count: { select: { items: true } },
       },
     }),
-    prisma.receipt.count({ where: { userId: session.user.id } }),
+    prisma.receipt.count({ where: { userId } }),
   ]);
 
   return NextResponse.json({
@@ -55,10 +53,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getAuthUserId(request);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await request.json();
@@ -89,7 +85,7 @@ export async function POST(request: NextRequest) {
 
       const existing = await prisma.receipt.findFirst({
         where: {
-          userId: session.user.id,
+          userId: userId,
           contentHash,
         },
       });
@@ -107,7 +103,7 @@ export async function POST(request: NextRequest) {
     const receiptDateParsed = new Date(receiptDate);
     const semanticDup = await prisma.receipt.findFirst({
       where: {
-        userId: session.user.id,
+        userId: userId,
         storeName,
         receiptDate: receiptDateParsed,
         totalAmount,
@@ -127,7 +123,7 @@ export async function POST(request: NextRequest) {
           SELECT DISTINCT ON ("itemNameNormalized")
             "itemNameNormalized", "productGroup", "subCategory"
           FROM "PriceHistory"
-          WHERE "userId" = ${session.user.id!}
+          WHERE "userId" = ${userId}
             AND "itemNameNormalized" = ANY(${items.map((i: { itemName: string }) => i.itemName.toLowerCase().trim())})
             AND "productGroup" IS NOT NULL
             AND "subCategory" IS NOT NULL
@@ -156,7 +152,7 @@ export async function POST(request: NextRequest) {
         const cat = String(item.category ?? "General");
         const normalized = String(item.itemName).toLowerCase().trim();
         const base = {
-          userId: session.user.id!,
+          userId: userId,
           itemName: String(item.itemName),
           itemNameNormalized: normalized,
           quantity: Number(item.quantity ?? 1),
@@ -185,7 +181,7 @@ export async function POST(request: NextRequest) {
     const receipt = await prisma.$transaction(async (tx) => {
       const newReceipt = await tx.receipt.create({
         data: {
-          userId: session.user.id!,
+          userId: userId,
           storeName: String(storeName),
           storeChain: storeChain ? String(storeChain) : null,
           receiptDate: new Date(receiptDate),
@@ -213,7 +209,7 @@ export async function POST(request: NextRequest) {
                 INSERT INTO "PriceHistory"
                   (id, "itemNameNormalized", "storeChain", "unitPrice", unit, category, "productGroup", "subCategory", "capturedAt", source, "userId", "receiptId")
                 VALUES
-                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.unit ?? null}, ${row.category}, ${row.productGroup}, ${row.subCategory}, NOW(), 'receipt', ${session.user.id!}, ${newReceipt.id})
+                  (gen_random_uuid(), ${row.itemNameNormalized}, ${sc}, ${row.unitPrice}, ${row.unit ?? null}, ${row.category}, ${row.productGroup}, ${row.subCategory}, NOW(), 'receipt', ${userId}, ${newReceipt.id})
               `;
             }
           }
