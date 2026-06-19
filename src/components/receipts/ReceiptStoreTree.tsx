@@ -53,14 +53,24 @@ export function ReceiptStoreTree({ receipts }: Props) {
     if (!storeMap.has(r.storeName)) storeMap.set(r.storeName, []);
     storeMap.get(r.storeName)!.push(r);
   }
-  // Sort each store's receipts newest-first
-  const stores = Array.from(storeMap.entries()).map(([name, rows]) => ({
-    name,
-    rows: rows.sort((a, b) => b.receiptDate.localeCompare(a.receiptDate)),
-    latestDate: rows.reduce((m, r) => r.receiptDate > m ? r.receiptDate : m, ""),
-    total: rows.reduce((s, r) => s + r.totalAmount, 0),
-    currency: rows[0].currency,
-  }));
+  // Sort each store's receipts newest-first, dedup by (date, total)
+  const stores = Array.from(storeMap.entries()).map(([name, rows]) => {
+    const sorted = rows.sort((a, b) => b.receiptDate.localeCompare(a.receiptDate));
+    const seen = new Set<string>();
+    const deduped = sorted.filter(r => {
+      const key = `${r.receiptDate}__${r.totalAmount}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return {
+      name,
+      rows: deduped,
+      latestDate: rows.reduce((m, r) => r.receiptDate > m ? r.receiptDate : m, ""),
+      total: deduped.reduce((s, r) => s + r.totalAmount, 0),
+      currency: rows[0].currency,
+    };
+  });
   // Sort stores by most-recent receipt (stores with newest receipts first)
   stores.sort((a, b) => b.latestDate.localeCompare(a.latestDate));
 

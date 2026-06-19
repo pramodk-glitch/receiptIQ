@@ -102,6 +102,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Semantic dedup: same store + date + total almost certainly means the same
+    // receipt scanned twice from different image files (bypasses content-hash check).
+    const receiptDateParsed = new Date(receiptDate);
+    const semanticDup = await prisma.receipt.findFirst({
+      where: {
+        userId: session.user.id,
+        storeName,
+        receiptDate: receiptDateParsed,
+        totalAmount,
+      },
+      select: { id: true },
+    });
+    if (semanticDup) {
+      return NextResponse.json(
+        { error: "Duplicate receipt detected", existingId: semanticDup.id },
+        { status: 409 },
+      );
+    }
+
     // ── Tier 1: DB lookup for items we've classified before ──────────────────
     const knownItems = items.length > 0
       ? await prisma.$queryRaw<Array<{ itemNameNormalized: string; productGroup: string; subCategory: string }>>`
